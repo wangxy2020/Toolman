@@ -58,17 +58,37 @@ function joinOdlPageBodies(result: DocumentParseResult): string {
     .join('\n\n')
 }
 
-/** Local ODL with a broken CJK text layer must not skip Hybrid OCR. */
-export function isOdlIngestResultInsufficient(result: DocumentParseResult): boolean {
+/**
+ * Local ODL with a broken CJK text layer must not skip Hybrid OCR.
+ * Density uses the span of pages *in this result* — never the PDF's total page
+ * count. Progressive 2-page previews of an 80-page digital PDF were diluted to
+ * ~text/80 and false-flagged as scans.
+ */
+export function isOdlIngestResultInsufficient(
+  result: DocumentParseResult,
+  options?: { pageSpan?: number },
+): boolean {
   const body = pickLongestUsableOdlBody(result.plainText, result.markdown) || joinOdlPageBodies(result)
   if (!body.trim()) return true
-  const pageCount = Math.max(
-    result.totalPages,
+  const extractedPages = Math.max(
     result.pages.length,
     splitPdfPagesByMarkers(result.plainText).length,
     splitPdfPagesByMarkers(body).length,
     1,
   )
+  const pageCount =
+    options?.pageSpan && options.pageSpan > 0 ? options.pageSpan : extractedPages
+  // Prefer per-page quality when this is a short progressive extract: a batch is
+  // sufficient when every returned page body is usable (digital preview).
+  if (
+    result.pages.length > 0 &&
+    result.pages.length <= 8 &&
+    result.pages.every((page) =>
+      isPdfPageTextUsable(pickIngestPageBody(page)),
+    )
+  ) {
+    return false
+  }
   return isPdfExtractedTextInsufficient(body, pageCount)
 }
 

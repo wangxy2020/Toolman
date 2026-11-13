@@ -1,5 +1,6 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { PdfParserBackend, TranslationLanguage } from '@toolman/shared'
+import type { TranslationLayoutBlock } from './translation-layout-blocks'
 import type { TranslationDocumentPageSnapshot } from './translation-storage'
 
 export type DocumentPageStatus =
@@ -17,6 +18,8 @@ export interface DocumentPageState {
   sourceText: string
   translatedText: string
   parsedMarkdown?: string
+  /** Optional block geometry for layout-preserving right pane (P4). */
+  layoutBlocks?: TranslationLayoutBlock[]
   status: DocumentPageStatus
   error?: string
 }
@@ -25,9 +28,15 @@ export interface DocumentPageRefs {
   pagesRef: MutableRefObject<DocumentPageState[]>
   totalPagesRef: MutableRefObject<number>
   generationRef: MutableRefObject<number>
+  /** OCR / parse page locks (not translation). */
   inFlightRef: MutableRefObject<Set<number>>
+  /** Translate page locks — separate so OCR finally cannot clear them. */
+  translateInFlightRef: MutableRefObject<Set<number>>
+  /** Generation that owns each in-flight translate page. */
+  translatePageGenerationRef: MutableRefObject<Map<number, number>>
   focusPageRef: MutableRefObject<number | null>
   parseArmedRef: MutableRefObject<boolean>
+  translationArmedRef: MutableRefObject<boolean>
   odlWarmRunningRef: MutableRefObject<boolean>
   hybridBackfillRunningRef: MutableRefObject<boolean>
   pageSourceLoadRef: MutableRefObject<Map<number, Promise<void>>>

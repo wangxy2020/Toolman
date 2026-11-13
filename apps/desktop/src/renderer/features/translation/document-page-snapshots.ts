@@ -25,6 +25,7 @@ export function buildDocumentPageSnapshots(
         sourceText: page.sourceText,
         translatedText: page.translatedText,
         parsedMarkdown: page.parsedMarkdown,
+        ...(page.layoutBlocks?.length ? { layoutBlocks: page.layoutBlocks } : {}),
         status: 'done',
       })
       continue
@@ -46,6 +47,7 @@ export function buildDocumentPageSnapshots(
         sourceText: page.sourceText,
         translatedText: page.translatedText,
         parsedMarkdown: page.parsedMarkdown,
+        ...(page.layoutBlocks?.length ? { layoutBlocks: page.layoutBlocks } : {}),
         status: 'parsed',
       })
       continue
@@ -57,6 +59,7 @@ export function buildDocumentPageSnapshots(
         sourceText: page.sourceText,
         translatedText: page.translatedText,
         parsedMarkdown: page.parsedMarkdown,
+        ...(page.layoutBlocks?.length ? { layoutBlocks: page.layoutBlocks } : {}),
         status: 'idle',
       })
     }
@@ -105,6 +108,7 @@ function snapshotToPageState(
     sourceText: snapshot.sourceText,
     translatedText: snapshot.translatedText,
     parsedMarkdown: snapshot.parsedMarkdown,
+    ...(snapshot.layoutBlocks?.length ? { layoutBlocks: snapshot.layoutBlocks } : {}),
     status: pageStatus,
     error: snapshot.status === 'empty' ? NO_VALID_PAGE_TEXT : undefined,
   }

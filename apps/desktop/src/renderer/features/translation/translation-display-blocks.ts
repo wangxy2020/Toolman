@@ -16,11 +16,37 @@ function isShortMetaLine(line: string): boolean {
   return looksLikeContactLine(trimmed) && Array.from(trimmed).length <= 88
 }
 
+const FIELD_LABEL_RE =
+  /^(?:PROJECT|EMPLOYER|CONTRACTOR|CONTRACT|CLIENT|OWNER|DATE|REF|SUBJECT|TITLE|项目|雇主|承包商|合同|日期|编号|事由|主题)[:：]/i
+const TITLE_PAGE_RE =
+  /^(?:FORM\s+OF\s+AGREEMENT|CONTRACT\s+AGREEMENT|EPC\s*\/?\s*TURNKEY|协议|合同|工程承包合同)\b/i
+
+function looksLikeFieldLabelLine(line: string): boolean {
+  const trimmed = line.trim()
+  if (!trimmed || trimmed.length > 64) return false
+  return FIELD_LABEL_RE.test(trimmed) || /^[A-Z][A-Z0-9 /&-]{1,24}:\s+\S/.test(trimmed)
+}
+
+function looksLikeTitlePageLine(line: string): boolean {
+  const trimmed = line.trim()
+  if (!trimmed || /[。！？.!?]$/.test(trimmed)) return false
+  const len = Array.from(trimmed).length
+  if (len < 3 || len > 56) return false
+  if (TITLE_PAGE_RE.test(trimmed)) return true
+  if (/^[A-Z0-9][A-Z0-9\s/&.,'()-]{2,55}$/.test(trimmed) && len <= 48) return true
+  return false
+}
+
 function classifyParagraph(text: string): Exclude<TranslationDisplayBlock, { type: 'table' }> {
   const trimmed = text.trim()
-  if (looksLikeTranslationSectionHeading(trimmed)) return { type: 'heading', text: trimmed }
+  if (looksLikeTranslationSectionHeading(trimmed) || looksLikeTitlePageLine(trimmed)) {
+    return { type: 'heading', text: trimmed }
+  }
+  if (looksLikeFieldLabelLine(trimmed)) return { type: 'meta', text: trimmed }
   const lines = trimmed.split('\n').filter((line) => line.trim())
-  if (lines.length > 0 && lines.every(isShortMetaLine)) return { type: 'meta', text: trimmed }
+  if (lines.length > 0 && lines.every((line) => isShortMetaLine(line) || looksLikeFieldLabelLine(line))) {
+    return { type: 'meta', text: trimmed }
+  }
   if (isShortMetaLine(trimmed)) return { type: 'meta', text: trimmed }
   return { type: 'paragraph', text: trimmed }
 }

@@ -76,6 +76,7 @@ export const translationPageZhCN = {
     pageHybridUnavailable:
       '扫描件需 ODL Hybrid 识别。请确认设置中已开启 ODL Hybrid OCR（Toolman 会自动启动本地服务），或关闭该选项以使用 glm-ocr。',
     pageError: '本页翻译失败',
+    pageRetry: '重试',
     pageJumpLabel: '跳转到页',
     pageJumpEnterHint: '回车跳转',
     pageJumpGo: '跳转',

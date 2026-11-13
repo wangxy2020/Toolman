@@ -55,13 +55,17 @@ export function useDocumentPageParsePipeline({
     setters.setPages((prev) => {
       const next = prev.map((page) =>
         page.status === 'parsing'
-          ? { ...page, status: 'empty' as const, error: 'empty' as const }
+          ? // Keep whatever preview we already have; don't wipe to empty mid-handoff
+            // when the user switches parse → translate.
+            page.translatedText.trim() || page.parsedMarkdown?.trim()
+              ? { ...page, status: 'parsed' as const, error: undefined }
+              : { ...page, status: 'idle' as const, error: undefined }
           : page,
       )
       refs.pagesRef.current = next
       return next
     })
-    refs.inFlightRef.current.clear()
+    // Do not clear inFlightRef here — translate may claim pages immediately after.
   }, [refs, setters])
 
   const startParse = useCallback(() => {

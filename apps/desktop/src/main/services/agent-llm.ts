@@ -5,6 +5,11 @@ import {
 } from '@toolman/shared'
 
 import { getProviderConfig, parseModelId } from './provider.service'
+import {
+  claimDesktopTrialLlm,
+  isCloudProviderWithoutUserKey,
+  recordDesktopTrialLlmUsage,
+} from './trial-llm.service'
 import { splitTranslationSegments } from './translation-segments'
 
 const gateway = createModelGateway()
@@ -14,11 +19,27 @@ const TRANSLATION_LANGUAGE_LABELS = {
   en: 'English',
 } as const
 
-const TRANSLATE_TIMEOUT_MS = 60_000
+const TRANSLATE_TIMEOUT_MS = 120_000
 /** Below this size, always use a single model call. */
 const SINGLE_SHOT_MAX_CHARS = 6000
 /** Max concurrent segment requests per translate call. */
 const SEGMENT_CONCURRENCY = 3
+
+function buildTranslatePrompt(text: string, targetLabel: string): string {
+  const hasTable = /<table\b/i.test(text) || /^\s*\|.+\|\s*$/m.test(text)
+  const rules = [
+    `Translate the following document excerpt into ${targetLabel}.`,
+    'Output only the translation.',
+    'Preserve paragraph breaks. Merge single-word wrapped lines into normal sentences.',
+    hasTable
+      ? 'The source contains a table (HTML <table> or Markdown pipe table). Keep the same table markup and cell structure; translate only cell text. Do not flatten the table into prose.'
+      : null,
+    'No explanations, notes, or markdown fences.',
+    '',
+    text,
+  ]
+  return rules.filter((line): line is string => line !== null).join('\n')
+}
 
 function detectJoinSeparator(text: string): '\n' | '\n\n' {
   return /\n\s*\n/.test(text) ? '\n\n' : '\n'
@@ -50,8 +71,10 @@ async function translateSegment(options: {
 }): Promise<string> {
   const { text, model, providerConfig, targetLabel } = options
 
-  const lineCount = text.split('\n').filter((line) => line.trim()).length
-  const maxTokens = Math.min(2048, Math.max(512, lineCount * 48))
+  // Estimate output budget from content size, not raw line count — ODL often
+  // emits one-token lines which inflated timeouts and still truncated prose.
+  const charBudget = Math.ceil(text.length * 1.2)
+  const maxTokens = Math.min(4096, Math.max(768, Math.ceil(charBudget / 2)))
   const controller = new AbortController()
   const abortTimer = setTimeout(() => controller.abort(), TRANSLATE_TIMEOUT_MS)
   const extraBody = providerConfig.type === 'ollama' ? { think: false } : undefined
@@ -64,14 +87,7 @@ async function translateSegment(options: {
         messages: [
           {
             role: 'user',
-            content: [
-              `Translate into ${targetLabel}.`,
-              'Output only the translation.',
-              'Keep the same line breaks (one input line → one output line).',
-              'No explanations.',
-              '',
-              text,
-            ].join('\n'),
+            content: buildTranslatePrompt(text, targetLabel),
           },
         ],
         temperature: 0.1,
@@ -126,10 +142,26 @@ async function translateSegmentsParallel(options: {
 
 export async function translateText(input: unknown) {
   const data = MessageTranslateInputSchema.parse(input)
-  const { providerId, model } = parseModelId(data.modelId)
-  const providerConfig = getProviderConfig(providerId)
+  const { providerId, model: parsedModel } = parseModelId(data.modelId)
+  let providerConfig = getProviderConfig(providerId)
   if (!providerConfig) {
     throw new ProviderError(`Provider ${providerId} 未找到或未启用`)
+  }
+
+  // Match chat generation: keyless cloud providers (e.g. DeepSeek) use the
+  // desktop trial key so translation does not hang/fail after source loads.
+  let model = parsedModel
+  let usedTrialLlm = false
+  if (isCloudProviderWithoutUserKey(providerConfig)) {
+    const trial = claimDesktopTrialLlm()
+    if (!trial.ok) throw new ProviderError(trial.message)
+    usedTrialLlm = true
+    providerConfig = {
+      type: 'openai_compatible',
+      baseUrl: trial.baseUrl,
+      apiKey: trial.apiKey,
+    }
+    model = trial.model
   }
 
   const targetLabel = TRANSLATION_LANGUAGE_LABELS[data.targetLanguage]
@@ -154,6 +186,12 @@ export async function translateText(input: unknown) {
     providerConfig,
     targetLabel,
   })
+
+  if (usedTrialLlm) {
+    recordDesktopTrialLlmUsage(
+      Math.max(1, Math.ceil((sourceText.length + translatedParts.join('').length) / 4)),
+    )
+  }
 
   return {
     text: translatedParts.join(detectJoinSeparator(sourceText)),

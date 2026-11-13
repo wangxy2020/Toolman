@@ -6,12 +6,31 @@ import {
   resolveTranslationTarget,
 } from './translation-utils'
 
+/** Renderer-side ceiling so a hung IPC cannot spin the header forever. */
+const TRANSLATE_INVOKE_TIMEOUT_MS = 120_000
+
 interface TranslateOptions {
   text: string
   modelId: string
   translationLanguages?: [TranslationLanguage, TranslationLanguage]
   /** When false, use configured language pair as-is. Default true. */
   autoDetectSource?: boolean
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(message)), ms)
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        window.clearTimeout(timer)
+        reject(error)
+      },
+    )
+  })
 }
 
 export function useTranslate() {
@@ -34,12 +53,16 @@ export function useTranslate() {
     inflightRef.current += 1
     setTranslating(true)
     try {
-      const result = await window.api.invoke(IpcChannel.MessageTranslate, {
-        text,
-        modelId: options.modelId,
-        sourceLanguage,
-        targetLanguage,
-      })
+      const result = await withTimeout(
+        window.api.invoke(IpcChannel.MessageTranslate, {
+          text,
+          modelId: options.modelId,
+          sourceLanguage,
+          targetLanguage,
+        }),
+        TRANSLATE_INVOKE_TIMEOUT_MS,
+        '翻译超时，请检查模型服务后重试',
+      )
 
       if (!result.ok) {
         throw new Error(result.error.message)

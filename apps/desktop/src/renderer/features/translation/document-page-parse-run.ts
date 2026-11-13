@@ -1,6 +1,7 @@
 import { TranslationDocumentParsePagesOutputSchema, type TranslationLanguage } from '@toolman/shared'
 import { cachePageState } from './document-page-cache'
 import {
+  applyParseResultsInChunks,
   buildOdlProgressiveParseBatches,
   invokeParsePages,
   ODL_PARSE_TIMEOUT_MS,
@@ -92,6 +93,61 @@ export async function runOdlProgressiveParse(args: {
       commitTotalPages(data.totalPages)
       if (data.odlScanDetected) skipLocalWarm = true
 
+      // Digital PDF: paint the probe immediately so page 1 is visible while the
+      // full-document run finishes, then upgrade with the final layout.
+      if (!data.odlScanDetected && batchIndex === 0 && end < total) {
+        const emptyInBatch = applyParseResults(batchPageNumbers, data.pages, {
+          emptyAsParsing: true,
+          previewLenient: true,
+        })
+        allEmptyPages.push(...emptyInBatch)
+
+        const fullTimeoutMs = Math.min(ODL_PARSE_TIMEOUT_MS, 180_000)
+        try {
+          const fullResult = await withTimeout(
+            invokeParsePages(filePath, 1, total, workspaceId, 'opendataloader', {
+              odlPreviewOnly: true,
+              fullDocument: true,
+              odlPreviewReset: true,
+              timeoutMs: fullTimeoutMs,
+            }),
+            fullTimeoutMs,
+            'OpenDataLoader 解析超时',
+          )
+          if (generation !== refs.generationRef.current) return
+          if (fullResult.ok) {
+            const fullData = TranslationDocumentParsePagesOutputSchema.parse(fullResult.data)
+            commitTotalPages(fullData.totalPages)
+            const covered = fullData.pages.filter((page) => {
+              const text = (page.text ?? page.markdown ?? '').trim()
+              return text.length > 0
+            }).length
+            if (covered >= Math.max(end + 1, Math.ceil(total * 0.5))) {
+              const allPages = Array.from(
+                { length: Math.max(total, fullData.totalPages) },
+                (_, index) => index + 1,
+              )
+              const emptyRest = await applyParseResultsInChunks(
+                allPages,
+                fullData.pages,
+                applyParseResults,
+                {
+                  emptyAsParsing: true,
+                  previewLenient: true,
+                  shouldAbort: () => generation !== refs.generationRef.current,
+                },
+              )
+              allEmptyPages.push(...emptyRest)
+              break
+            }
+          }
+        } catch {
+          // Probe already painted; continue progressive batches.
+        }
+        // Full-doc missed — probe already painted; keep progressive going.
+        continue
+      }
+
       const emptyInBatch = applyParseResults(batchPageNumbers, data.pages, {
         emptyAsParsing: true,
         previewLenient: true,
@@ -124,52 +180,20 @@ export async function runOdlProgressiveParse(args: {
           if (fullResult.ok) {
             const fullData = TranslationDocumentParsePagesOutputSchema.parse(fullResult.data)
             commitTotalPages(fullData.totalPages)
-            const emptyRest = applyParseResults(remainingPages, fullData.pages, {
-              emptyAsParsing: true,
-              previewLenient: true,
-            })
+            const emptyRest = await applyParseResultsInChunks(
+              remainingPages,
+              fullData.pages,
+              applyParseResults,
+              {
+                emptyAsParsing: true,
+                previewLenient: true,
+                shouldAbort: () => generation !== refs.generationRef.current,
+              },
+            )
             allEmptyPages.push(...emptyRest)
           }
           break
         }
-      }
-
-      // Digital PDF: local ODL has text — finish remaining pages in one fast full-document run.
-      if (!data.odlScanDetected && batchIndex === 0 && end < total) {
-        const fullTimeoutMs = Math.min(ODL_PARSE_TIMEOUT_MS, 120_000)
-        const fullResult = await withTimeout(
-          invokeParsePages(filePath, 1, total, workspaceId, 'opendataloader', {
-            odlPreviewOnly: true,
-            fullDocument: true,
-            timeoutMs: fullTimeoutMs,
-          }),
-          fullTimeoutMs,
-          'OpenDataLoader 解析超时',
-        )
-        if (generation !== refs.generationRef.current) return
-        if (!fullResult.ok) {
-          setters.setPages((prev) => {
-            const next = prev.map((page) =>
-              page.pageNumber > end && pending.some((item) => item.pageNumber === page.pageNumber)
-                ? { ...page, status: 'error' as const, error: fullResult.error.message }
-                : page,
-            )
-            refs.pagesRef.current = next
-            return next
-          })
-          return
-        }
-        const fullData = TranslationDocumentParsePagesOutputSchema.parse(fullResult.data)
-        commitTotalPages(fullData.totalPages)
-        const remainingPages = Array.from({ length: total }, (_, index) => index + 1).filter(
-          (pageNumber) => pageNumber > end,
-        )
-        const emptyRest = applyParseResults(remainingPages, fullData.pages, {
-          emptyAsParsing: true,
-          previewLenient: true,
-        })
-        allEmptyPages.push(...emptyRest)
-        break
       }
     }
 

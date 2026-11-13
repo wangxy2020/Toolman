@@ -1,28 +1,44 @@
-import { DOCUMENT_PAGE_OVERSCAN } from './document-page-window'
-
-/** Visible page renders first; window neighbors start immediately at lower priority. */
-export type PdfPreviewDirection = 1 | -1
-/** Hidden decode pool around the current page — do not mount these as extra <img>s. */
-export const PDF_PREVIEW_WARM_RADIUS = 3
 /**
- * Same lookahead on first open and while paging so later pages stay warm.
- * Keep this uniform — a one-shot first-idle burst made page 8+ feel cold.
+ * Progressive left-pane PDF preview policy (IMA-like).
+ *
+ * Landed-page first: fling past unloaded pages → stop on N → only N is required.
+ * Flow on settle: N immediate/readable (≥720) → N sharp (≤1440) → neighbor
+ * readable prefetch. Soft-cancel drops other pages without killing the preview
+ * worker / pdf.js document cache.
  */
-export const PDF_PREVIEW_NEAR_AHEAD = 8
-export const PDF_PREVIEW_PREFETCH_AHEAD = 8
-export const PDF_PREVIEW_PREFETCH_BEHIND = 2
-/** Paint every mounted window row so flips do not wait for ±1 activation. */
-export const PDF_PREVIEW_ACTIVE_RADIUS = DOCUMENT_PAGE_OVERSCAN
-/** Fast 1x raster — kept for tests / optional low-cost prefetch. */
-export const PDF_PREVIEW_FAST_MAX_WIDTH = 1000
-/** Match the main-process preview cap so Retina panes are not downsampled twice. */
-export const PDF_PREVIEW_MAX_RENDER_WIDTH = 2400
+
+export type PdfPreviewDirection = 1 | -1
+export const PDF_PREVIEW_WARM_RADIUS = 2
+export const PDF_PREVIEW_NEAR_AHEAD = 1
+export const PDF_PREVIEW_PREFETCH_AHEAD = 1
+export const PDF_PREVIEW_PREFETCH_BEHIND = 0
+export const PDF_PREVIEW_ACTIVE_RADIUS = 1
+/** First paint = readable frame (text + scan). Same as immediate. */
+export const PDF_PREVIEW_FAST_MAX_WIDTH = 720
+/** Alias: immediate first frame is the readable ≥720 paint. */
+export const PDF_PREVIEW_IMMEDIATE_MAX_WIDTH = PDF_PREVIEW_FAST_MAX_WIDTH
+/** Settled / focused upgrade (device pixels). */
+export const PDF_PREVIEW_MAX_RENDER_WIDTH = 1440
 export const PDF_PREVIEW_MAX_DPR = 2
+export const PDF_PREVIEW_SHARP_MIN_BOOST = 1.75
+/** Wait before sharp so neighbor prefetch can claim the worker first. */
+export const PDF_PREVIEW_SHARP_DELAY_MS = 280
 export type PdfPreviewPrefetchExtent = 'none' | 'near' | 'far'
+
+function bucketPreviewWidth(width: number): number {
+  return Math.max(160, Math.round(width / 8) * 8)
+}
 
 export function resolvePdfPreviewFastWidth(displayWidth: number): number {
   if (displayWidth <= 0) return 0
-  return Math.min(PDF_PREVIEW_FAST_MAX_WIDTH, Math.max(160, Math.round(displayWidth)))
+  return bucketPreviewWidth(
+    Math.min(PDF_PREVIEW_FAST_MAX_WIDTH, Math.max(240, Math.round(displayWidth))),
+  )
+}
+
+/** Immediate first frame — same width as readable (≥720). */
+export function resolvePdfPreviewImmediateWidth(displayWidth: number): number {
+  return resolvePdfPreviewFastWidth(displayWidth)
 }
 
 export function resolvePdfPreviewSharpWidth(displayWidth: number): number {
@@ -30,13 +46,17 @@ export function resolvePdfPreviewSharpWidth(displayWidth: number): number {
   const dpr =
     typeof window !== 'undefined'
       ? Math.min(PDF_PREVIEW_MAX_DPR, Math.max(1, window.devicePixelRatio || 1))
-      : 1
-  return Math.min(PDF_PREVIEW_MAX_RENDER_WIDTH, Math.max(160, Math.round(displayWidth * dpr)))
+      : 2
+  const fast = resolvePdfPreviewFastWidth(displayWidth)
+  const ideal = Math.round(displayWidth * dpr)
+  const boosted = Math.round(fast * PDF_PREVIEW_SHARP_MIN_BOOST)
+  return bucketPreviewWidth(
+    Math.min(PDF_PREVIEW_MAX_RENDER_WIDTH, Math.max(fast + 200, ideal, boosted)),
+  )
 }
 
-/** Visible and prefetch rasters use device pixels so the left PDF stays as sharp as the source. */
 export function resolvePdfPreviewRenderWidth(displayWidth: number): number {
-  return resolvePdfPreviewSharpWidth(displayWidth)
+  return resolvePdfPreviewFastWidth(displayWidth)
 }
 
 export function resolvePdfPreviewDirection(previousPage: number, currentPage: number): PdfPreviewDirection {
@@ -63,7 +83,6 @@ export function resolvePdfPreviewPriority(pageNumber: number, currentPage: numbe
   return pageNumber === currentPage ? 'visible' : 'prefetch'
 }
 
-/** Windowed rows show saved parse/translation; height is not locked to the PDF. */
 export function shouldAttachSavedSnapshotBody(isPdf: boolean, previewUnlocked: boolean): boolean {
   return !isPdf || previewUnlocked
 }
@@ -73,11 +92,6 @@ export type ParseBodyAttachFlags = {
   attachRich: boolean
 }
 
-/**
- * Mounted window rows keep plain text so neighbors are not blank cards.
- * Rich markdown starts on current ±1; rows may stick rich once shown so flips
- * do not tear down parsed HTML. Fit work for non-current rows stays deferred.
- */
 export function resolveParseBodyAttachFlags(options: {
   isPdf: boolean
   pageNumber: number
@@ -91,9 +105,7 @@ export function resolveParseBodyAttachFlags(options: {
   if (options.pageNumber < start || options.pageNumber > end) {
     return { attachPlain: false, attachRich: false }
   }
-  const current = Math.max(1, Math.floor(options.currentPage) || 1)
-  const near = Math.abs(options.pageNumber - current) <= 1
-  return { attachPlain: true, attachRich: near }
+  return { attachPlain: true, attachRich: true }
 }
 
 export function resolvePdfPreviewFetchDeltas(
@@ -121,8 +133,9 @@ export function resolvePdfPreviewFetchPages(options: {
     { pageNumber: current, priority: 'visible' },
   ]
   const ahead = PDF_PREVIEW_PREFETCH_AHEAD
+  const behind = PDF_PREVIEW_PREFETCH_BEHIND
   const seen = new Set([current])
-  for (const delta of resolvePdfPreviewFetchDeltas(options.direction, ahead)) {
+  for (const delta of resolvePdfPreviewFetchDeltas(options.direction, ahead, behind)) {
     const page = current + delta
     if (page < 1 || page > total || seen.has(page)) continue
     seen.add(page)

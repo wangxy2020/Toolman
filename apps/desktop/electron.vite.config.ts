@@ -34,6 +34,7 @@ export default defineConfig({
           index: resolve('src/main/index.ts'),
           'workers/parse-file.worker': resolve('src/main/workers/parse-file.worker.ts'),
           'workers/db.worker': resolve('src/main/workers/db.worker.ts'),
+          'workers/pdf-preview.worker': resolve('src/main/workers/pdf-preview.worker.ts'),
         },
       },
     },

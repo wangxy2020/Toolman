@@ -182,15 +182,20 @@ export function useTranslationPageDocumentActions(options: {
       setError(t('translationPage.documents.needDocument'))
       return
     }
+    // Only the translating state toggles stop — parse-busy must not swallow the click.
     if (documentBusy) {
       documentWorkspaceRef.current?.stopTranslation()
       return
+    }
+    // Always cancel in-flight parse before arming translate (generation handoff).
+    if (documentParsing) {
+      documentWorkspaceRef.current?.stopParse()
     }
     const started = documentWorkspaceRef.current?.startTranslation()
     if (started === false) {
       setError(t('translationPage.documents.translateNotReady'))
     }
-  }, [activeDocument, documentBusy, documentWorkspaceRef, modelId, setError, t])
+  }, [activeDocument, documentBusy, documentParsing, documentWorkspaceRef, modelId, setError, t])
 
   return {
     handleSaveDocument,

@@ -17,9 +17,9 @@ import {
 describe('document-pdf-viewer-scale', () => {
   it('scales the backing store with DPR and caps GPU size', () => {
     expect(resolvePdfViewerBackingWidth(0, 2)).toBe(0)
-    expect(resolvePdfViewerBackingWidth(800, 2)).toBe(1600)
+    expect(resolvePdfViewerBackingWidth(800, 2)).toBe(1200)
     expect(resolvePdfViewerBackingWidth(2000, 3)).toBe(PDF_VIEWER_MAX_BACKING_WIDTH)
-    expect(resolvePdfViewerBackingWidth(800, 3, 'preview')).toBe(1000)
+    expect(resolvePdfViewerBackingWidth(800, 3, 'preview')).toBe(800)
     expect(resolvePdfPageViewportScale(612, 1224)).toBe(2)
     expect(resolvePdfPageViewportScale(0, 800)).toBe(800)
   })
@@ -49,7 +49,7 @@ describe('document-pdf-viewer-scale', () => {
     expect(resolvePdfViewerPaintQuality(4, 4)).toBe('sharp')
     expect(resolvePdfViewerPaintQuality(4, 4, { allowSharp: false })).toBe('preview')
     expect(resolvePdfViewerPaintQuality(5, 4, { allowSharp: true })).toBe('preview')
-    expect(resolvePdfViewerBackingWidth(900, 2, 'sharp')).toBe(1800)
+    expect(resolvePdfViewerBackingWidth(900, 2, 'sharp')).toBe(1350)
   })
 
   it('only reschedules paints for first draw or settled sharp upgrades', () => {

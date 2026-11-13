@@ -59,9 +59,22 @@ describe('document page fit', () => {
     expect(fitted.fontSize).toBeGreaterThanOrEqual(DOCUMENT_FIT_TABLE_FONT_MIN)
   })
 
-  it('uses one uniform scale when the smallest type still overflows', () => {
+  it('applies mild scale only when content nearly fits; otherwise keeps 1 for scroll', () => {
     expect(resolveDocumentPageFitScale(800, 800)).toBe(1)
-    expect(resolveDocumentPageFitScale(1600, 800)).toBe(0.5)
+    expect(resolveDocumentPageFitScale(900, 800)).toBeCloseTo(800 / 900, 2)
+    expect(resolveDocumentPageFitScale(1600, 800)).toBe(1)
+  })
+
+  it('rejects saved fits that crushed below the readable scale floor', () => {
+    const saved = {
+      fontSize: 12,
+      lineHeight: 1.35,
+      padding: 10,
+      scale: 0.5,
+      boxWidth: 400,
+      boxHeight: 600,
+    }
+    expect(canReuseDocumentPageFit(saved, 400, 600)).toBe(false)
   })
 
   it('writes type settings into Markdown and reads them back', () => {
@@ -87,10 +100,10 @@ describe('document page fit', () => {
     })
   })
 
-  it('scales saved 字号 when the window page box changes', () => {
+  it('keeps 字号 stable when the window page box changes', () => {
     const scaled = scaleDocumentPageFitForBox(
       {
-        fontSize: 10,
+        fontSize: 13,
         lineHeight: 1.4,
         padding: 10,
         scale: 1,
@@ -100,7 +113,7 @@ describe('document page fit', () => {
       800,
       1200,
     )
-    expect(scaled.fontSize).toBe(DOCUMENT_FIT_FONT_MAX)
+    expect(scaled.fontSize).toBe(13)
     expect(scaled.lineHeight).toBe(1.4)
     expect(scaled.scale).toBe(1)
   })

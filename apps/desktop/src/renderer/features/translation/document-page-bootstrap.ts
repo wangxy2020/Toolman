@@ -1,7 +1,6 @@
 import { useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import { TranslationDocumentParsePagesOutputSchema, type PdfParserBackend, type TranslationLanguage } from '@toolman/shared'
 import { hydratePagesFromCache } from './document-page-cache'
-import { getPdfViewerDocumentInfo } from './document-pdf-viewer'
 import {
   invokeParsePages,
   isPdfPath,
@@ -72,23 +71,31 @@ export function useDocumentPageBootstrap({
       setPageAspect(null)
       setBootstrapError(null)
       setBootstrapping(false)
+      refs.translationArmedRef.current = false
       setTranslationArmed(false)
       setParseArmed(false)
       refs.inFlightRef.current.clear()
+      refs.translateInFlightRef.current.clear()
+      refs.translatePageGenerationRef.current.clear()
       refs.translateQueueRef.current = []
       refs.ocrQueueRef.current = []
       refs.pageSourceLoadRef.current.clear()
       return
     }
 
+    // Document identity change — cancel work. Same file re-runs must not disarm
+    // an in-progress translate (that left the header spinning forever).
     const generation = ++refs.generationRef.current
     let cancelled = false
     const snapshotsForRestore = savedPageSnapshotsRef.current
     const restoredCount = pageCountFromSnapshots(snapshotsForRestore)
     setBootstrapError(null)
+    refs.translationArmedRef.current = false
     setTranslationArmed(false)
     setParseArmed(false)
     refs.inFlightRef.current.clear()
+    refs.translateInFlightRef.current.clear()
+    refs.translatePageGenerationRef.current.clear()
     refs.translateQueueRef.current = []
     refs.ocrQueueRef.current = []
     refs.pageSourceLoadRef.current.clear()
@@ -123,42 +130,9 @@ export function useDocumentPageBootstrap({
           return
         }
 
-        if (isPdfPath(filePath)) {
-          try {
-            const info = await getPdfViewerDocumentInfo(filePath)
-            if (cancelled || generation !== refs.generationRef.current) return
-            const count = Math.max(1, info.numPages)
-            commitTotalPages(count)
-            if (info.pageWidth > 0 && info.pageHeight > 0) {
-              setPageAspect(info.pageHeight / info.pageWidth)
-            }
-            const initialPages = applySavedPageSnapshots(
-              hydratePagesFromCache({
-                documentId,
-                filePath,
-                totalPages: count,
-                modelId: translationParamsRef.current.modelId,
-                languages: translationParamsRef.current.languages,
-                autoDetectSource: translationParamsRef.current.autoDetectSource,
-                seedPages: [],
-              }),
-              snapshotsForRestore ?? savedPageSnapshotsRef.current,
-              {
-                documentId,
-                filePath,
-                modelId: translationParamsRef.current.modelId,
-                languages: translationParamsRef.current.languages,
-                autoDetectSource: translationParamsRef.current.autoDetectSource,
-              },
-            )
-            setPages(initialPages)
-            refs.pagesRef.current = initialPages
-            return
-          } catch {
-            // Fall through to main-process metadata if the vector viewer cannot open the file.
-          }
-        }
-
+        // Do not open large scanned PDFs with renderer PDF.js just for metadata —
+        // that alone beachballs the window on 50MB+ JPEG page stacks. Main-process
+        // metadataOnly is enough for page count / aspect.
         const metadataOnly = isPdfPath(filePath)
         const result = await withTimeout(
           invokeParsePages(filePath, 1, 1, workspaceId, pdfParserBackend, { metadataOnly }),
@@ -233,9 +207,16 @@ export function useDocumentPageBootstrap({
 
     return () => {
       cancelled = true
-      refs.generationRef.current += 1
+      // Cleanup of a superseded bootstrap for the SAME document must not cancel
+      // an armed translation (pdfParserBackend / workspace churn). Only bump
+      // generation when translate is not armed — startTranslation owns its gen.
+      if (!refs.translationArmedRef.current) {
+        refs.generationRef.current += 1
+        refs.translateQueueRef.current = []
+        refs.translateInFlightRef.current.clear()
+        refs.translatePageGenerationRef.current.clear()
+      }
       refs.inFlightRef.current.clear()
-      refs.translateQueueRef.current = []
       refs.ocrQueueRef.current = []
       refs.pageSourceLoadRef.current.clear()
     }
@@ -284,7 +265,7 @@ export function useDocumentPageBootstrap({
     setPages,
   ])
 
-  // Translation model/language changes must not reset ODL preview pages or cancel parse IPC.
+  // Translation model/language changes must not reset ODL preview pages or cancel parse/translate IPC.
   useEffect(() => {
     const prev = translationParamsRef.current
     const unchanged =
@@ -298,16 +279,26 @@ export function useDocumentPageBootstrap({
       return
     }
 
-    refs.translateQueueRef.current = []
-    refs.pageSourceLoadRef.current.clear()
-
-    if (
-      refs.parseArmedRef.current ||
-      refs.pagesRef.current.some((page) => page.status === 'parsing' || page.status === 'parsed')
-    ) {
+    // Never touch queues while parse/translate is armed — clearing the translate
+    // queue here left pages stuck on「正在翻译」with no worker (IMA dual-pane).
+    if (refs.parseArmedRef.current || refs.translationArmedRef.current) {
       return
     }
 
+    const hasActiveDocumentWork = refs.pagesRef.current.some(
+      (page) =>
+        page.status === 'parsing' ||
+        page.status === 'parsed' ||
+        page.status === 'translating' ||
+        page.status === 'loading-source' ||
+        page.status === 'done',
+    )
+    if (hasActiveDocumentWork) {
+      return
+    }
+
+    refs.translateQueueRef.current = []
+    refs.pageSourceLoadRef.current.clear()
     refs.generationRef.current += 1
     refs.inFlightRef.current.clear()
     refs.ocrQueueRef.current = []

@@ -1,14 +1,14 @@
-/** Settled current page: Retina-sharp without oversized GPU allocations. */
-export const PDF_VIEWER_MAX_BACKING_WIDTH = 2560
-export const PDF_VIEWER_MAX_DPR = 2
+/** Settled current page: sharp enough without oversized scanned-page paints. */
+export const PDF_VIEWER_MAX_BACKING_WIDTH = 1680
+export const PDF_VIEWER_MAX_DPR = 1.5
 /** Neighbor / in-scroll pages: cheaper paint while keeping layout stable. */
-export const PDF_VIEWER_PREVIEW_BACKING_WIDTH = 1400
-export const PDF_VIEWER_PREVIEW_DPR = 1.25
-export const PDF_VIEWER_PAGE_BATCH = 10
-/** Current sharp + one neighbor preview can paint without serializing every flip. */
-export const PDF_VIEWER_RENDER_CONCURRENCY = 2
+export const PDF_VIEWER_PREVIEW_BACKING_WIDTH = 960
+export const PDF_VIEWER_PREVIEW_DPR = 1
+export const PDF_VIEWER_PAGE_BATCH = 4
+/** One paint at a time — concurrent sharp+preview fights scroll on image PDFs. */
+export const PDF_VIEWER_RENDER_CONCURRENCY = 1
 /** Keep recently painted pages so scrolling back does not blank-reload. */
-export const PDF_VIEWER_PAINT_CACHE_LIMIT = 48
+export const PDF_VIEWER_PAINT_CACHE_LIMIT = 36
 /** Local/range reads: larger chunks cut round-trips while paging. */
 export const PDF_VIEWER_RANGE_CHUNK_SIZE = 262_144
 

@@ -99,6 +99,7 @@ export function useTranslationDocumentWorkspace(options: Options) {
     stopParse,
     stopTranslation,
     focusPage,
+    translatePage,
     translatedText,
   } = useDocumentPageTranslation({
     filePath: activeDocument?.filePath ?? null,
@@ -318,6 +319,13 @@ export function useTranslationDocumentWorkspace(options: Options) {
     [ensurePageReady],
   )
 
+  const handleRetryTranslate = useCallback(
+    (pageNumber: number) => {
+      translatePage(pageNumber, true)
+    },
+    [translatePage],
+  )
+
   return {
     scrollRef: scrollRef as RefObject<HTMLDivElement | null>,
     pageBox,
@@ -335,5 +343,6 @@ export function useTranslationDocumentWorkspace(options: Options) {
     getRowHeight,
     reportHeight,
     handleEnsurePage,
+    handleRetryTranslate,
   }
 }

@@ -54,4 +54,30 @@ describe('splitTranslationSegments', () => {
       expect(segment.length).toBeLessThanOrEqual(2000)
     }
   })
+
+  it('keeps an HTML table as one segment even when the page is long', () => {
+    const prose = `${'A'.repeat(1200)}\n\n${'B'.repeat(1200)}`
+    const table =
+      '<table><tr><th>Item</th><th>Value</th></tr><tr><td>Fee</td><td>100</td></tr></table>'
+    const source = `${prose}\n\n${table}`
+    const segments = splitTranslationSegments(source)
+    expect(segments.some((segment) => segment.includes('<table') && segment.includes('</table>'))).toBe(
+      true,
+    )
+    const tableSegment = segments.find((segment) => segment.includes('<table'))
+    expect(tableSegment).toContain('<th>Item</th>')
+    expect(tableSegment).not.toContain('A'.repeat(100))
+  })
+
+  it('preserves leading prose and does not repeat the table', () => {
+    const prose = `${'A'.repeat(1200)}\n\n${'B'.repeat(1200)}`
+    const table =
+      '<table><tr><th>Item</th><th>Value</th></tr><tr><td>Fee</td><td>100</td></tr></table>'
+    const source = `${prose}\n\n${table}`
+    const segments = splitTranslationSegments(source)
+    const joined = segments.join('\n\n')
+    expect(joined).toContain('A'.repeat(100))
+    expect(joined).toContain('B'.repeat(100))
+    expect(segments.filter((segment) => segment.includes('<table')).length).toBe(1)
+  })
 })

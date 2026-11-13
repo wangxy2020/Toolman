@@ -191,7 +191,7 @@ export function TranslationPageHeader({
           label={translateLabel}
           accent
           active={translating}
-          disabled={!canTranslate || (parsing && !translating)}
+          disabled={!canTranslate}
           onClick={onTranslate}
         >
           <IconTranslate size={16} className={translating ? 'tm-icon-spin' : undefined} />

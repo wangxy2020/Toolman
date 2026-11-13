@@ -1,18 +1,18 @@
-import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
+import { memo, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useI18n } from '../../i18n/useI18n'
-import { getCachedPageImage, pageImageCacheKey } from './document-page-cache'
 import {
-  isPdfViewerRenderCancelled,
-  shouldSchedulePdfPagePaint,
-  type PdfViewerPaintQuality,
-} from './document-pdf-viewer-scale'
-import {
-  getCachedPdfPaintQuality,
-  renderPdfPageToCanvas,
-  restorePdfPagePaintToCanvas,
-} from './document-pdf-viewer'
+  getAnyCachedPageImage,
+  getCachedPageImage,
+  pageImageCacheKey,
+  pinPageImageKey,
+  subscribePageImageCache,
+  unpinPageImageKey,
+} from './document-page-cache'
 import { ensurePdfPageImage, isPdfPreviewRenderDropped } from './document-page-preview-load'
-import { resolvePdfPreviewRenderWidth } from './document-page-preview-policy'
+import {
+  resolvePdfPreviewFastWidth,
+  resolvePdfPreviewSharpWidth,
+} from './document-page-preview-policy'
 import { splitTranslationParagraphs } from './translation-paragraphs'
 import type { PageDisplayBox } from './translation-document-workspace-types'
 import type { DocumentPageState } from './useDocumentPageTranslation'
@@ -24,6 +24,33 @@ function resolvePdfPreviewAspectStyle(pageAspect: number | null): CSSProperties 
   return { aspectRatio: '612 / 792' }
 }
 
+type PreviewQuality = 'fast' | 'sharp'
+
+function pickCachedSrc(
+  filePath: string,
+  pageNumber: number,
+  fastKey: string,
+  sharpKey: string,
+): { src: string | null; quality: PreviewQuality } {
+  if (sharpKey) {
+    const sharp = getCachedPageImage(sharpKey)
+    if (sharp) return { src: sharp, quality: 'sharp' }
+  }
+  if (fastKey) {
+    const fast = getCachedPageImage(fastKey)
+    if (fast) return { src: fast, quality: 'fast' }
+  }
+  // Any prior width for this page beats a white loading slot on remount.
+  const any = getAnyCachedPageImage(filePath, pageNumber)
+  if (any) return { src: any, quality: 'fast' }
+  return { src: null, quality: 'fast' }
+}
+
+/**
+ * Left-pane view: never blank a mounted frame (white loading slot caused
+ * "整页变白" during scan flips). Overlay loading only when there is no src yet.
+ * Self-heal only the focused page — neighbors wait for controller prefetch.
+ */
 const PdfPageRasterImage = memo(function PdfPageRasterImage({
   filePath,
   pageNumber,
@@ -31,6 +58,7 @@ const PdfPageRasterImage = memo(function PdfPageRasterImage({
   pageBox,
   pageAspect,
   active,
+  scrollSettled,
   cacheEpoch,
   onReady,
 }: {
@@ -40,86 +68,124 @@ const PdfPageRasterImage = memo(function PdfPageRasterImage({
   pageBox: PageDisplayBox
   pageAspect: number | null
   active: boolean
+  scrollSettled: boolean
   cacheEpoch: number
   onReady?: (pageNumber: number) => void
 }) {
   const { t } = useI18n()
-  const renderWidth = resolvePdfPreviewRenderWidth(pageBox.width)
+  const fastWidth = resolvePdfPreviewFastWidth(pageBox.width)
+  const sharpWidth = resolvePdfPreviewSharpWidth(pageBox.width)
   const aspectStyle = resolvePdfPreviewAspectStyle(pageAspect)
-  const cacheKey = renderWidth > 0 ? pageImageCacheKey(filePath, pageNumber, renderWidth) : ''
-  const [src, setSrc] = useState<string | null>(() =>
-    cacheKey ? getCachedPageImage(cacheKey) : null,
-  )
+  const fastKey = fastWidth > 0 ? pageImageCacheKey(filePath, pageNumber, fastWidth) : ''
+  const sharpKey = sharpWidth > 0 ? pageImageCacheKey(filePath, pageNumber, sharpWidth) : ''
+  const initial = pickCachedSrc(filePath, pageNumber, fastKey, sharpKey)
+  const [src, setSrc] = useState<string | null>(initial.src)
+  const [quality, setQuality] = useState<PreviewQuality>(initial.quality)
   const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  const requestIdRef = useRef(0)
+  const [loading, setLoading] = useState(!initial.src)
+  const fastRequestIdRef = useRef(0)
+  const readySentRef = useRef(false)
   const currentPageRef = useRef(currentPage)
+  const srcRef = useRef(src)
   currentPageRef.current = currentPage
+  srcRef.current = src
+  const isFocused = pageNumber === currentPage
 
-  useEffect(() => () => {
-    requestIdRef.current += 1
-  }, [])
+  useEffect(
+    () => () => {
+      fastRequestIdRef.current += 1
+    },
+    [],
+  )
 
+  // Pin displayed cache keys so LRU eviction cannot revoke an on-screen blob.
   useEffect(() => {
-    if (!cacheKey) return
-    const cached = getCachedPageImage(cacheKey)
-    if (!cached) return
-    setSrc(cached)
+    const keys = [fastKey, sharpKey].filter(Boolean)
+    for (const key of keys) pinPageImageKey(key)
+    return () => {
+      for (const key of keys) unpinPageImageKey(key)
+    }
+  }, [fastKey, sharpKey])
+
+  const applyCached = useRef<() => boolean>(() => false)
+  applyCached.current = () => {
+    const next = pickCachedSrc(filePath, pageNumber, fastKey, sharpKey)
+    if (!next.src) return false
+    setSrc((prev) => (next.src && next.src !== prev ? next.src : prev))
+    setQuality(next.quality)
     setError(null)
     setLoading(false)
-  }, [cacheEpoch, cacheKey])
+    return true
+  }
 
   useEffect(() => {
-    if (src) onReady?.(pageNumber)
+    applyCached.current()
+  }, [cacheEpoch, fastKey, sharpKey, filePath, pageNumber])
+
+  useEffect(() => {
+    return subscribePageImageCache(() => {
+      applyCached.current()
+    })
+  }, [fastKey, sharpKey, filePath, pageNumber])
+
+  // While focused on a fast frame, poll for the sharp cache entry so a completed
+  // worker raster always paints without needing a scroll-driven re-render.
+  useEffect(() => {
+    if (!isFocused || !sharpKey || quality === 'sharp') return
+    const timer = window.setInterval(() => {
+      if (getCachedPageImage(sharpKey)) applyCached.current()
+    }, 200)
+    return () => window.clearInterval(timer)
+  }, [isFocused, quality, sharpKey])
+
+  useEffect(() => {
+    if (!src || readySentRef.current) return
+    readySentRef.current = true
+    onReady?.(pageNumber)
   }, [onReady, pageNumber, src])
 
+  // Self-heal when focused + settled and still empty — readable ≥720 first paint.
   useEffect(() => {
-    if (!active || !filePath || !cacheKey || renderWidth < 1) return
-    const cached = getCachedPageImage(cacheKey)
-    if (cached) {
-      setSrc(cached)
+    if (!active || !isFocused || !filePath || !scrollSettled) return
+    if (fastWidth < 1 || srcRef.current) return
+
+    const requestId = ++fastRequestIdRef.current
+    let cancelled = false
+
+    void (async () => {
+      setLoading(true)
       setError(null)
-      setLoading(false)
-      return
-    }
-
-    const requestId = ++requestIdRef.current
-    setError(null)
-    setLoading((visible) => visible || !src)
-
-    void ensurePdfPageImage({
-      filePath,
-      pageNumber,
-      renderWidth,
-      currentPage: currentPageRef.current,
-    })
-      .catch((err) => {
-        if (requestId !== requestIdRef.current) return Promise.reject(err)
-        if (!isPdfPreviewRenderDropped(err) || pageNumber !== currentPageRef.current) {
-          return Promise.reject(err)
-        }
-        return ensurePdfPageImage({
+      try {
+        const url = await ensurePdfPageImage({
           filePath,
           pageNumber,
-          renderWidth,
+          renderWidth: fastWidth,
           currentPage: currentPageRef.current,
         })
-      })
-      .then((url) => {
-        if (requestId !== requestIdRef.current || !url) return
+        if (cancelled || requestId !== fastRequestIdRef.current || !url) return
         setSrc(url)
-      })
-      .catch((err) => {
-        if (requestId !== requestIdRef.current) return
+        setQuality('fast')
+      } catch (err) {
+        if (cancelled || requestId !== fastRequestIdRef.current) return
         if (isPdfPreviewRenderDropped(err)) return
-        setError(err instanceof Error ? err.message : t('translationPage.documents.previewFailed'))
-      })
-      .finally(() => {
-        if (requestId === requestIdRef.current) setLoading(false)
-      })
-  }, [active, cacheKey, filePath, pageNumber, renderWidth, t])
+        if (!srcRef.current) {
+          setError(err instanceof Error ? err.message : t('translationPage.documents.previewFailed'))
+        }
+      } finally {
+        if (requestId === fastRequestIdRef.current) setLoading(false)
+      }
+    })()
 
-  if (error) {
+    return () => {
+      cancelled = true
+      fastRequestIdRef.current += 1
+    }
+  }, [active, fastWidth, filePath, isFocused, pageNumber, scrollSettled, t])
+
+  // Sharp is scheduled only by usePdfPreviewPolicy after readable lands — this view
+  // only paints cache updates so 1440px upgrades cannot starve first paint.
+
+  if (error && !src) {
     return (
       <div
         className="tm-translation-doc-page-image-slot tm-translation-doc-page-image-status tm-translation-doc-page-image-status--error"
@@ -136,12 +202,9 @@ const PdfPageRasterImage = memo(function PdfPageRasterImage({
         className="tm-translation-doc-page-image-slot tm-translation-doc-page-image-status"
         style={aspectStyle}
         role="status"
+        aria-busy={loading || undefined}
       >
-        <p>
-          {loading || (active && renderWidth > 0)
-            ? t('translationPage.documents.loadingPreview')
-            : t('translationPage.documents.pagePending')}
-        </p>
+        <p>{t('translationPage.documents.loadingPreview')}</p>
       </div>
     )
   }
@@ -158,174 +221,16 @@ const PdfPageRasterImage = memo(function PdfPageRasterImage({
           })}
           draggable={false}
           decoding="async"
-          fetchPriority={pageNumber === currentPage ? 'high' : 'low'}
+          fetchPriority={isFocused ? 'high' : 'low'}
+          data-preview-quality={quality}
         />
-      </div>
-    </div>
-  )
-})
-
-const PdfPageCanvas = memo(function PdfPageCanvas({
-  filePath,
-  pageNumber,
-  currentPage,
-  pageBox,
-  pageAspect,
-  active,
-  scrollSettled,
-  onReady,
-  onVectorFailure,
-}: {
-  filePath: string
-  pageNumber: number
-  currentPage: number
-  pageBox: PageDisplayBox
-  pageAspect: number | null
-  active: boolean
-  scrollSettled: boolean
-  onReady?: (pageNumber: number) => void
-  onVectorFailure: () => void
-}) {
-  const { t } = useI18n()
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const paintedRef = useRef(false)
-  const paintedQualityRef = useRef<PdfViewerPaintQuality | null>(null)
-  const paintedCssWidthRef = useRef(0)
-  const [painted, setPainted] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const aspectStyle = resolvePdfPreviewAspectStyle(pageAspect)
-  const cssWidth = pageBox.width
-  // While scrolling keep preview; after settle the current page upgrades to sharp.
-  const allowSharp = scrollSettled
-
-  useEffect(() => {
-    // Mounted window rows paint once and keep the bitmap across flips.
-    // Sharp upgrades wait until scroll settles so the left pane stays clear and smooth.
-    if (!active && paintedRef.current) return
-    if (!active) return
-    const canvas = canvasRef.current
-    if (!canvas || !filePath || cssWidth < 1) return
-
-    if (paintedCssWidthRef.current > 0 && Math.abs(paintedCssWidthRef.current - cssWidth) >= 48) {
-      paintedRef.current = false
-      paintedQualityRef.current = null
-      setPainted(false)
-    }
-
-    if (!paintedRef.current) {
-      const restored = restorePdfPagePaintToCanvas({
-        filePath,
-        pageNumber,
-        canvas,
-        cssWidth,
-        minQuality: allowSharp && pageNumber === currentPage ? 'sharp' : undefined,
-      })
-      if (restored) {
-        paintedRef.current = true
-        paintedQualityRef.current = restored
-        paintedCssWidthRef.current = cssWidth
-        setPainted(true)
-        setLoading(false)
-        onReady?.(pageNumber)
-      } else if (allowSharp && pageNumber === currentPage) {
-        // Prefer any cached frame immediately, then upgrade to sharp below.
-        const preview = restorePdfPagePaintToCanvas({
-          filePath,
-          pageNumber,
-          canvas,
-          cssWidth,
-        })
-        if (preview) {
-          paintedRef.current = true
-          paintedQualityRef.current = preview
-          paintedCssWidthRef.current = cssWidth
-          setPainted(true)
-          setLoading(false)
-          onReady?.(pageNumber)
-        }
-      }
-    } else if (!paintedQualityRef.current) {
-      paintedQualityRef.current = getCachedPdfPaintQuality(filePath, pageNumber, cssWidth)
-    }
-
-    if (
-      !shouldSchedulePdfPagePaint({
-        active,
-        painted: paintedRef.current,
-        paintedQuality: paintedQualityRef.current,
-        pageNumber,
-        currentPage,
-        allowSharp,
-      })
-    ) {
-      return
-    }
-
-    const controller = new AbortController()
-    const upgrading = paintedRef.current
-    const delay = upgrading ? (allowSharp ? 32 : 80) : 0
-    const timer = window.setTimeout(() => {
-      if (!upgrading) setLoading(true)
-      void renderPdfPageToCanvas({
-        filePath,
-        pageNumber,
-        canvas,
-        cssWidth,
-        currentPage,
-        allowSharp,
-        signal: controller.signal,
-      })
-        .then(() => {
-          if (controller.signal.aborted) return
-          const quality =
-            allowSharp && pageNumber === currentPage ? 'sharp' : 'preview'
-          paintedRef.current = true
-          paintedQualityRef.current = quality
-          paintedCssWidthRef.current = cssWidth
-          setPainted(true)
-          setLoading(false)
-          onReady?.(pageNumber)
-        })
-        .catch((error) => {
-          if (controller.signal.aborted || isPdfViewerRenderCancelled(error)) return
-          onVectorFailure()
-        })
-    }, delay)
-    return () => {
-      controller.abort()
-      window.clearTimeout(timer)
-    }
-  }, [
-    active,
-    allowSharp,
-    cssWidth,
-    currentPage,
-    filePath,
-    onReady,
-    onVectorFailure,
-    pageNumber,
-  ])
-
-  return (
-    <div className="tm-translation-doc-page-image-slot" style={aspectStyle}>
-      <div className="tm-translation-doc-page-image-wrap">
-        {active || painted ? (
-          <canvas
-            ref={canvasRef}
-            className="tm-translation-doc-page-image"
-            aria-label={t('translationPage.documents.pageLabel', {
-              page: String(pageNumber),
-              total: '',
-            })}
-          />
-        ) : null}
-        {!painted ? (
-          <div className="tm-translation-doc-page-image-status tm-translation-doc-page-image-status--overlay" role="status">
-            <p>
-              {loading || (active && cssWidth > 0)
-                ? t('translationPage.documents.loadingPreview')
-                : t('translationPage.documents.pagePending')}
-            </p>
+        {loading && isFocused ? (
+          <div
+            className="tm-translation-doc-page-image-status tm-translation-doc-page-image-status--overlay"
+            role="status"
+            aria-busy="true"
+          >
+            <p>{t('translationPage.documents.loadingPreview')}</p>
           </div>
         ) : null}
       </div>
@@ -354,24 +259,8 @@ const PdfPageImage = memo(function PdfPageImage({
   cacheEpoch: number
   onReady?: (pageNumber: number) => void
 }) {
-  const [mode, setMode] = useState<'vector' | 'raster'>('vector')
-  const onVectorFailure = useCallback(() => setMode('raster'), [])
-  if (mode === 'raster') {
-    return (
-      <PdfPageRasterImage
-        filePath={filePath}
-        pageNumber={pageNumber}
-        currentPage={currentPage}
-        pageBox={pageBox}
-        pageAspect={pageAspect}
-        active={active}
-        cacheEpoch={cacheEpoch}
-        onReady={onReady}
-      />
-    )
-  }
   return (
-    <PdfPageCanvas
+    <PdfPageRasterImage
       filePath={filePath}
       pageNumber={pageNumber}
       currentPage={currentPage}
@@ -379,8 +268,8 @@ const PdfPageImage = memo(function PdfPageImage({
       pageAspect={pageAspect}
       active={active}
       scrollSettled={scrollSettled}
+      cacheEpoch={cacheEpoch}
       onReady={onReady}
-      onVectorFailure={onVectorFailure}
     />
   )
 })

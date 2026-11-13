@@ -7,7 +7,7 @@ import { useDocumentPageParsePipeline } from './document-page-parse-pipeline'
 import {
   OCR_PREFETCH_AHEAD,
   resolvedPageCount,
-  SOURCE_PREFETCH_BATCH,
+  TRANSLATE_START_AHEAD,
 } from './document-page-parse-helpers'
 import { useDocumentPageSourcePrefetch } from './document-page-source-prefetch'
 import { useDocumentPageTranslateQueue } from './document-page-translate-queue'
@@ -45,9 +45,12 @@ export function useDocumentPageTranslation({
   const [hybridBackfillRunning, setHybridBackfillRunning] = useState(false)
 
   const parseArmedRef = useRef(false)
+  const translationArmedRef = useRef(false)
   const odlWarmRunningRef = useRef(false)
   const hybridBackfillRunningRef = useRef(false)
   const inFlightRef = useRef(new Set<number>())
+  const translateInFlightRef = useRef(new Set<number>())
+  const translatePageGenerationRef = useRef(new Map<number, number>())
   const translateQueueRef = useRef<number[]>([])
   const translateWorkerRunningRef = useRef(false)
   const ocrQueueRef = useRef<number[]>([])
@@ -62,9 +65,12 @@ export function useDocumentPageTranslation({
   const refs = useMemo<DocumentPageRefs>(
     () => ({
       parseArmedRef,
+      translationArmedRef,
       odlWarmRunningRef,
       hybridBackfillRunningRef,
       inFlightRef,
+      translateInFlightRef,
+      translatePageGenerationRef,
       translateQueueRef,
       translateWorkerRunningRef,
       ocrQueueRef,
@@ -94,6 +100,7 @@ export function useDocumentPageTranslation({
     savedPageSnapshotsRef.current = savedPageSnapshots
   }, [autoDetectSource, languages, modelId, savedPageSnapshots])
   useEffect(() => { parseArmedRef.current = parseArmed }, [parseArmed])
+  useEffect(() => { translationArmedRef.current = translationArmed }, [translationArmed])
   useEffect(() => { odlWarmRunningRef.current = odlWarmRunning }, [odlWarmRunning])
   useEffect(() => { hybridBackfillRunningRef.current = hybridBackfillRunning }, [hybridBackfillRunning])
   useEffect(() => { pagesRef.current = pages }, [pages])
@@ -203,11 +210,20 @@ export function useDocumentPageTranslation({
       }
       if (translationArmed) {
         translatePage(safePage, true)
-        void prefetchPageSources(
-          safePage,
-          Math.min(pageLimit, safePage + SOURCE_PREFETCH_BATCH - 1),
-          refs.generationRef.current,
-        )
+        // Priority: current page + next N (IMA-style look-ahead).
+        for (let ahead = 1; ahead <= TRANSLATE_START_AHEAD; ahead += 1) {
+          const nextPage = safePage + ahead
+          if (pageLimit > 0 && nextPage > pageLimit) break
+          translatePage(nextPage, false)
+        }
+        // Prefetch neighbors only — never fold the focused page into a multi-page
+        // ODL batch, or its translate path waits on the whole slab.
+        // Keep scroll-driven prefetch tiny — large batches stall image-PDF flips.
+        const aheadStart = safePage + 1
+        const aheadEnd = Math.min(pageLimit, safePage + Math.max(2, TRANSLATE_START_AHEAD))
+        if (aheadStart <= aheadEnd) {
+          void prefetchPageSources(aheadStart, aheadEnd, refs.generationRef.current)
+        }
       }
     },
     [parseArmed, prefetchPageSources, queueOcrBackfill, refs, translatePage, translationArmed],
@@ -225,9 +241,18 @@ export function useDocumentPageTranslation({
         return
       }
       if (!translationArmed) return
+      const current = refs.pagesRef.current.find((page) => page.pageNumber === pageNumber)
+      // Recover pages left as「正在翻译」after a cleared queue (not actually in-flight).
+      if (
+        (current?.status === 'translating' || current?.status === 'loading-source') &&
+        !refs.translateInFlightRef.current.has(pageNumber) &&
+        !refs.translateQueueRef.current.includes(pageNumber)
+      ) {
+        updatePage(pageNumber, { status: 'idle', error: undefined })
+      }
       await translatePage(pageNumber)
     },
-    [enabled, parseArmed, queueOcrBackfill, refs, translatePage, translationArmed],
+    [enabled, parseArmed, queueOcrBackfill, refs, translatePage, translationArmed, updatePage],
   )
 
   const translatedText = pages
@@ -239,6 +264,21 @@ export function useDocumentPageTranslation({
   const translateActive = pages.some(
     (page) => page.status === 'loading-source' || page.status === 'translating',
   )
+  // Soft progress fills the gap between the probe paint and the full-doc apply
+  // so the status bar keeps moving while later pages are still arriving.
+  const [parseElapsedMs, setParseElapsedMs] = useState(0)
+  useEffect(() => {
+    if (!odlWarmRunning && !hybridBackfillRunning) {
+      setParseElapsedMs(0)
+      return
+    }
+    const startedAt = Date.now()
+    const timer = window.setInterval(() => {
+      setParseElapsedMs(Date.now() - startedAt)
+    }, 400)
+    return () => window.clearInterval(timer)
+  }, [hybridBackfillRunning, odlWarmRunning])
+
   const parseProgress = useMemo(() => {
     const total = Math.max(totalPages, pages.length)
     if (total < 1) return null
@@ -250,8 +290,29 @@ export function useDocumentPageTranslation({
         page.status === 'empty' ||
         page.status === 'error',
     ).length
-    return { completed, total, percent: Math.min(100, Math.round((completed / total) * 100)) }
-  }, [hybridBackfillRunning, odlWarmRunning, pages, parseArmed, parsingActive, totalPages])
+    let percent = Math.min(100, Math.round((completed / total) * 100))
+    let reportedCompleted = completed
+    const fullDocRunning =
+      (odlWarmRunning || hybridBackfillRunning) && completed < total
+    if (fullDocRunning) {
+      // Ease toward 95% while the JVM full-doc / Hybrid run works (even at 0 pages).
+      const soft = Math.min(95, Math.max(percent, 2 + Math.floor(parseElapsedMs / 700)))
+      percent = Math.max(percent, soft)
+      reportedCompleted = Math.max(
+        completed,
+        Math.min(total - 1, Math.floor((percent / 100) * total)),
+      )
+    }
+    return { completed: reportedCompleted, total, percent }
+  }, [
+    hybridBackfillRunning,
+    odlWarmRunning,
+    pages,
+    parseArmed,
+    parseElapsedMs,
+    parsingActive,
+    totalPages,
+  ])
 
   return {
     totalPages,

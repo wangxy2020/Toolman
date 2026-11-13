@@ -27,6 +27,7 @@ interface Props {
   cacheEpoch: number
   onPreviewReady: (pageNumber: number) => void
   onEnsurePage: (pageNumber: number) => void
+  onRetryTranslate?: (pageNumber: number) => void
   onRowHeight: (pageNumber: number, height: number) => void
   remarkOpen?: boolean
   remarkText?: string
@@ -34,6 +35,11 @@ interface Props {
   onRemarkClose?: () => void
   onRemarkOpen?: (pageNumber: number) => void
   onFitPersist?: (pageNumber: number, fit: DocumentPageFitRecord) => void
+  documentId?: string | null
+}
+
+function pageHasDisplayBody(page: DocumentPageState): boolean {
+  return Boolean(page.translatedText.trim() || page.parsedMarkdown?.trim())
 }
 
 export const TranslationDocumentPageRow = memo(function TranslationDocumentPageRow({
@@ -55,6 +61,7 @@ export const TranslationDocumentPageRow = memo(function TranslationDocumentPageR
   cacheEpoch,
   onPreviewReady,
   onEnsurePage,
+  onRetryTranslate,
   onRowHeight,
   remarkOpen = false,
   remarkText = '',
@@ -62,10 +69,9 @@ export const TranslationDocumentPageRow = memo(function TranslationDocumentPageR
   onRemarkClose,
   onRemarkOpen,
   onFitPersist,
+  documentId = null,
 }: Props) {
   const rowRef = useRef<HTMLDivElement>(null)
-  // Once rich content mounts for this row, keep it for the row lifetime so flips
-  // do not tear down markdown/HTML and re-fit on every currentPage change.
   const stickyRichRef = useRef(heavyContent)
   if (heavyContent) stickyRichRef.current = true
   const showHeavyContent = heavyContent || stickyRichRef.current
@@ -73,6 +79,41 @@ export const TranslationDocumentPageRow = memo(function TranslationDocumentPageR
     () => resolvePageForDisplay(page, body, attachBody),
     [attachBody, body, page],
   )
+
+  // Lock the first non-empty final body for this mounted row. Updating on every
+  // settle / parse chunk made tables and prose reshuffle while browsing.
+  const lockedPageRef = useRef<DocumentPageState | null>(null)
+  const lockedSignatureRef = useRef('')
+  const nextSignature = [
+    displayPage.status,
+    displayPage.translatedText.length,
+    displayPage.parsedMarkdown?.length ?? 0,
+    displayPage.translatedText.slice(0, 48),
+    displayPage.parsedMarkdown?.slice(0, 48) ?? '',
+  ].join('|')
+  const lockedHasTable = /<table\b/i.test(lockedPageRef.current?.parsedMarkdown ?? '')
+  const nextHasTable = /<table\b/i.test(displayPage.parsedMarkdown ?? '')
+  if (!lockedPageRef.current && pageHasDisplayBody(displayPage)) {
+    lockedPageRef.current = displayPage
+    lockedSignatureRef.current = nextSignature
+  } else if (
+    lockedPageRef.current &&
+    scrollSettled &&
+    pageHasDisplayBody(displayPage) &&
+    nextSignature !== lockedSignatureRef.current &&
+    // Upgrade when translate completes, a table appears, or full-doc replaces the
+    // progressive probe draft (parsed content change before translation).
+    ((displayPage.status === 'done' && lockedPageRef.current.status !== 'done') ||
+      (nextHasTable && !lockedHasTable) ||
+      (displayPage.status === 'parsed' &&
+        lockedPageRef.current.status !== 'done' &&
+        lockedPageRef.current.status !== 'translating' &&
+        lockedPageRef.current.status !== 'loading-source'))
+  ) {
+    lockedPageRef.current = displayPage
+    lockedSignatureRef.current = nextSignature
+  }
+  const cardPage = lockedPageRef.current ?? displayPage
 
   useLayoutEffect(() => {
     const el = rowRef.current
@@ -90,10 +131,19 @@ export const TranslationDocumentPageRow = memo(function TranslationDocumentPageR
   }, [onRowHeight, page.pageNumber])
 
   useEffect(() => {
-    if (previewActive && (translationArmed || parseArmed)) {
-      onEnsurePage(page.pageNumber)
-    }
-  }, [onEnsurePage, page.pageNumber, parseArmed, previewActive, translationArmed])
+    if (!previewActive || (!translationArmed && !parseArmed)) return
+    if (!scrollSettled) return
+    if (Math.abs(page.pageNumber - currentPage) > 1) return
+    onEnsurePage(page.pageNumber)
+  }, [
+    currentPage,
+    onEnsurePage,
+    page.pageNumber,
+    parseArmed,
+    previewActive,
+    scrollSettled,
+    translationArmed,
+  ])
 
   return (
     <div
@@ -138,15 +188,23 @@ export const TranslationDocumentPageRow = memo(function TranslationDocumentPageR
       <section className="tm-translation-doc-row-pane tm-translation-doc-row-pane--target">
         <div className="tm-translation-doc-row-frame tm-translation-doc-row-frame--target">
           <DocumentPageCard
-            page={displayPage}
+            page={cardPage}
             totalPages={totalPages}
             hasModel={hasModel}
             parseArmed={parseArmed}
             heavyContent={showHeavyContent}
-            fitToPage={isPdf && attachBody}
+            // One-shot fit on the focused settled page only. Neighbors keep
+            // clip + savedFit so scrolling does not rewrite every row's type.
+            fitToPage={
+              isPdf && attachBody && scrollSettled && page.pageNumber === currentPage
+            }
+            clipToPage={isPdf && attachBody}
             savedFit={body?.fit ?? null}
             onFitPersist={onFitPersist}
             deferFit={!scrollSettled || page.pageNumber !== currentPage}
+            layoutBlocks={attachBody ? (cardPage.layoutBlocks ?? null) : null}
+            onRetryTranslate={onRetryTranslate}
+            documentId={documentId}
           />
         </div>
       </section>

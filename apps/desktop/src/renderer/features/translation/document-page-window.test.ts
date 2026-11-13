@@ -12,14 +12,14 @@ import {
 } from './document-page-window'
 
 describe('document-page-window', () => {
-  it('keeps the same seven-page window on the first page and later pages', () => {
-    expect(resolveDocumentPageWindow(1, 40)).toEqual({ startPage: 1, endPage: 7 })
-    expect(resolveDocumentPageWindow(2, 40)).toEqual({ startPage: 1, endPage: 7 })
-    expect(resolveDocumentPageWindow(10, 40)).toEqual({ startPage: 7, endPage: 13 })
-    expect(resolveDocumentPageWindow(40, 40)).toEqual({ startPage: 34, endPage: 40 })
+  it('keeps a three-page window (current ±1) for smooth PDF flips', () => {
+    expect(resolveDocumentPageWindow(1, 40)).toEqual({ startPage: 1, endPage: 3 })
+    expect(resolveDocumentPageWindow(2, 40)).toEqual({ startPage: 1, endPage: 3 })
+    expect(resolveDocumentPageWindow(10, 40)).toEqual({ startPage: 9, endPage: 11 })
+    expect(resolveDocumentPageWindow(40, 40)).toEqual({ startPage: 38, endPage: 40 })
   })
 
-  it('can still resolve prefetch batches of ten when requested', () => {
+  it('can still resolve prefetch batches when requested', () => {
     expect(resolveDocumentPageWindow(1, 48, 2, 10)).toEqual({ startPage: 1, endPage: 10 })
     expect(resolveDocumentPageWindow(10, 48, 2, 10)).toEqual({ startPage: 1, endPage: 10 })
     expect(resolveDocumentPageWindow(11, 48, 2, 10)).toEqual({ startPage: 11, endPage: 20 })
@@ -27,9 +27,9 @@ describe('document-page-window', () => {
   })
 
   it('mounts a centered overscan window for the live PDF viewer', () => {
-    expect(resolveDocumentPageWindow(1, 48)).toEqual({ startPage: 1, endPage: 7 })
-    expect(resolveDocumentPageWindow(11, 48)).toEqual({ startPage: 8, endPage: 14 })
-    expect(resolveDocumentPageWindow(48, 48)).toEqual({ startPage: 42, endPage: 48 })
+    expect(resolveDocumentPageWindow(1, 48)).toEqual({ startPage: 1, endPage: 3 })
+    expect(resolveDocumentPageWindow(11, 48)).toEqual({ startPage: 10, endPage: 12 })
+    expect(resolveDocumentPageWindow(48, 48)).toEqual({ startPage: 46, endPage: 48 })
   })
 
   it('maps scroll offset to a page number', () => {

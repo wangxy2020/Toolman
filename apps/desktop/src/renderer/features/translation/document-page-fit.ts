@@ -1,13 +1,20 @@
-export const DOCUMENT_FIT_FONT_MAX = 18
-export const DOCUMENT_FIT_FONT_MIN = 11
-export const DOCUMENT_FIT_LINE_MAX = 1.55
-export const DOCUMENT_FIT_LINE_MIN = 1.4
-export const DOCUMENT_FIT_PAD_MAX = 16
+/** Default prose size inside the PDF page box (before measure shrinks further). */
+export const DOCUMENT_FIT_FONT_MAX = 15
+/** Readable floor — never crush body text below this for “fit the page”. */
+export const DOCUMENT_FIT_FONT_MIN = 12
+export const DOCUMENT_FIT_LINE_MAX = 1.5
+export const DOCUMENT_FIT_LINE_MIN = 1.35
+export const DOCUMENT_FIT_PAD_MAX = 14
 export const DOCUMENT_FIT_PAD_MIN = 8
+/**
+ * Mild last-resort scale only when content almost fits.
+ * Below this, keep fontMin and let the page card scroll instead.
+ */
+export const DOCUMENT_FIT_SCALE_MIN = 0.85
 
 /** Parsed HTML tables need a lower cap so a full grid still fits the PDF page. */
 export const DOCUMENT_FIT_TABLE_FONT_MAX = 12
-export const DOCUMENT_FIT_TABLE_FONT_MIN = 8
+export const DOCUMENT_FIT_TABLE_FONT_MIN = 10
 export const DOCUMENT_FIT_TABLE_LINE_MAX = 1.35
 export const DOCUMENT_FIT_TABLE_LINE_MIN = 1.2
 export const DOCUMENT_FIT_TABLE_PAD_MAX = 10
@@ -116,10 +123,15 @@ export function usesFixedDocumentPageType(fit: Pick<DocumentPageFitStyle, 'fontS
   )
 }
 
-/** Last-resort uniform scale when the smallest type still overflows the PDF page. */
+/**
+ * Mild uniform scale when the smallest type still slightly overflows.
+ * If the page would need more than ~15% shrink, return 1 and let the card scroll.
+ */
 export function resolveDocumentPageFitScale(contentHeight: number, boxHeight: number): number {
   if (boxHeight < 1 || contentHeight <= boxHeight + 1) return 1
-  return Math.max(0.5, Math.min(1, boxHeight / contentHeight))
+  const ratio = boxHeight / contentHeight
+  if (ratio >= DOCUMENT_FIT_SCALE_MIN) return Math.min(1, ratio)
+  return 1
 }
 
 export function isSameDocumentPageFit(
@@ -156,6 +168,8 @@ export function canReuseDocumentPageFit(
   if (!isNegligibleDocumentFitBoxChange(saved, boxWidth, boxHeight)) return false
   if (saved.fontSize > caps.fontMax + 0.15) return false
   if (saved.fontSize < caps.fontMin - 0.15) return false
+  // Old fits that crushed with scale < 0.85 must remeasure for readability.
+  if (saved.scale < DOCUMENT_FIT_SCALE_MIN - 0.01) return false
   return true
 }
 
@@ -228,19 +242,21 @@ export function writeDocumentPageFitMarkdown(body: string, fit: DocumentPageFitR
   return clean ? `${comment}\n\n${clean}` : comment
 }
 
-/** When the PDF page box changes, keep the same 字号/行距 ratio relative to the saved box. */
+/**
+ * Window resize must not rewrite 字号. Scaling by page-box height made maximize
+ * (and intermediate layout frames) shrink readable type on some pages.
+ * Typography stays put; overflow scrolls inside the card.
+ */
 export function scaleDocumentPageFitForBox(
   saved: DocumentPageFitRecord,
   _boxWidth: number,
-  boxHeight: number,
+  _boxHeight: number,
   caps: DocumentPageFitCaps = DOCUMENT_PAGE_FIT_PROSE_CAPS,
 ): DocumentPageFitStyle {
-  const heightRatio = saved.boxHeight > 0 && boxHeight > 0 ? boxHeight / saved.boxHeight : 1
-  const safeRatio = Number.isFinite(heightRatio) && heightRatio > 0 ? heightRatio : 1
   return {
-    fontSize: Math.max(caps.fontMin, Math.min(caps.fontMax, round1(saved.fontSize * safeRatio))),
+    fontSize: Math.max(caps.fontMin, Math.min(caps.fontMax, round1(saved.fontSize))),
     lineHeight: saved.lineHeight,
-    padding: Math.max(caps.padMin, Math.min(caps.padMax, Math.round(saved.padding * safeRatio))),
-    scale: saved.scale,
+    padding: Math.max(caps.padMin, Math.min(caps.padMax, Math.round(saved.padding))),
+    scale: saved.scale >= DOCUMENT_FIT_SCALE_MIN ? Math.min(1, saved.scale) : 1,
   }
 }

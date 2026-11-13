@@ -7,6 +7,8 @@ import {
   type TranslationDocumentKind,
 } from './translation-document-utils'
 import { normalizePageRemarks } from './document-page-remarks'
+import type { TranslationLayoutBlock } from './translation-layout-blocks'
+import { normalizeLayoutBlocks } from './translation-layout-blocks'
 
 export const TRANSLATION_STORAGE_KEY = 'toolman:translation-data'
 
@@ -47,6 +49,8 @@ export interface TranslationDocumentPageSnapshot {
   sourceText: string
   translatedText: string
   parsedMarkdown?: string
+  /** Optional block geometry for layout-preserving dual pane (P4). */
+  layoutBlocks?: TranslationLayoutBlock[]
   status: TranslationDocumentPageSnapshotStatus
 }
 
@@ -112,6 +116,9 @@ function normalizePageSnapshots(
       const translatedText = typeof record.translatedText === 'string' ? record.translatedText : ''
       const parsedMarkdown =
         typeof record.parsedMarkdown === 'string' ? record.parsedMarkdown : undefined
+      const layoutBlocks = normalizeLayoutBlocks(
+        (record as { layoutBlocks?: unknown }).layoutBlocks,
+      )
       const status: TranslationDocumentPageSnapshotStatus =
         record.status === 'parsed' ||
         record.status === 'done' ||
@@ -124,7 +131,8 @@ function normalizePageSnapshots(
         status !== 'empty' &&
         !sourceText.trim() &&
         !translatedText.trim() &&
-        !parsedMarkdown?.trim()
+        !parsedMarkdown?.trim() &&
+        !layoutBlocks?.length
       ) {
         return null
       }
@@ -134,6 +142,7 @@ function normalizePageSnapshots(
         sourceText,
         translatedText,
         ...(parsedMarkdown !== undefined ? { parsedMarkdown } : {}),
+        ...(layoutBlocks ? { layoutBlocks } : {}),
         status,
       }
     })

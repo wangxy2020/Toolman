@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, type RefObject } from 'react'
 import {
+  DOCUMENT_FIT_SCALE_MIN,
   DOCUMENT_PAGE_FIT_PROSE_CAPS,
   applyDocumentPageFitVars,
   canReuseDocumentPageFit,
@@ -13,6 +14,12 @@ import {
   type DocumentPageFitCaps,
   type DocumentPageFitRecord,
 } from './document-page-fit'
+import {
+  getSharedDocumentPageFit,
+  reportDocumentPageNaturalFit,
+  subscribeSharedDocumentPageFit,
+  type DocumentFitKind,
+} from './document-page-fit-shared'
 
 function readAvailableHeight(box: HTMLElement, boxHeight: number): number {
   const style = window.getComputedStyle(box)
@@ -29,7 +36,15 @@ function readContentHeight(box: HTMLElement, inner: HTMLElement | null): number 
   return height
 }
 
-/** Keep the right pane at the PDF page height; shrink 字号/行距 until the text fits. */
+function withBox(
+  style: { fontSize: number; lineHeight: number; padding: number; scale: number },
+  boxWidth: number,
+  boxHeight: number,
+): DocumentPageFitRecord {
+  return { ...style, boxWidth, boxHeight }
+}
+
+/** Keep the right pane at the PDF page height; shrink 字号 to fontMin, then scroll if needed. */
 export function useFitDocumentPageContent(
   enabled: boolean,
   contentKey: string,
@@ -37,6 +52,9 @@ export function useFitDocumentPageContent(
   onPersistFit?: (fit: DocumentPageFitRecord) => void,
   caps: DocumentPageFitCaps = DOCUMENT_PAGE_FIT_PROSE_CAPS,
   deferMeasure = false,
+  documentId: string | null = null,
+  pageNumber = 0,
+  fitKind: DocumentFitKind = 'prose',
 ): RefObject<HTMLDivElement | null> {
   const boxRef = useRef<HTMLDivElement | null>(null)
   const persistRef = useRef(onPersistFit)
@@ -48,14 +66,69 @@ export function useFitDocumentPageContent(
 
   useLayoutEffect(() => {
     const box = boxRef.current
-    if (!box || !enabled) {
-      if (box) applyDocumentPageFitVars(box, documentPageFitReset(caps))
-      return
-    }
+    if (!box) return
 
     let cancelled = false
+
+    const commit = (next: DocumentPageFitRecord, persist = true) => {
+      applyDocumentPageFitVars(box, next)
+      const previous = measuredFitRef.current
+      measuredFitRef.current = next
+      if (persist && (!previous || !isSameDocumentPageFit(previous, next))) {
+        persistRef.current?.(next)
+      }
+    }
+
+    const paintStable = () => {
+      // Neighbors / mid-scroll: prefer document shared 字号, then last measure.
+      const shared = documentId ? getSharedDocumentPageFit(documentId, fitKind) : null
+      const base = measuredFitRef.current ?? savedFitRef.current
+      if (shared) {
+        const next = withBox(
+          { ...shared, scale: 1 },
+          base?.boxWidth || box.clientWidth,
+          base?.boxHeight || box.clientHeight,
+        )
+        commit(next, false)
+        return
+      }
+      if (base) commit(base, false)
+    }
+
+    if (!enabled) {
+      paintStable()
+      const unsubscribeShared = subscribeSharedDocumentPageFit(() => {
+        if (cancelled) return
+        paintStable()
+      })
+      return () => {
+        cancelled = true
+        unsubscribeShared()
+      }
+    }
+
     let frame = 0
-    measuredFitRef.current = savedFitRef.current
+    if (savedFitRef.current) measuredFitRef.current = savedFitRef.current
+
+    const applySharedOrNatural = (
+      natural: { fontSize: number; lineHeight: number; padding: number; scale: number },
+      boxWidth: number,
+      boxHeight: number,
+    ) => {
+      if (documentId && pageNumber > 0) {
+        const shared = reportDocumentPageNaturalFit({
+          documentId,
+          pageNumber,
+          kind: fitKind,
+          fontSize: natural.fontSize,
+          caps,
+        })
+        // Document median 字号 — dense pages scroll instead of shrinking alone.
+        commit(withBox({ ...shared, scale: 1 }, boxWidth, boxHeight))
+        return
+      }
+      commit(withBox(natural, boxWidth, boxHeight))
+    }
 
     const measure = () => {
       if (cancelled) return
@@ -88,14 +161,8 @@ export function useFitDocumentPageContent(
       if (overflowHeight > availableHeight + 1) {
         scale = resolveDocumentPageFitScale(overflowHeight, availableHeight)
       }
-      const next: DocumentPageFitRecord = { ...nextType, scale, boxWidth, boxHeight }
-      applyDocumentPageFitVars(box, next)
-      const previous = measuredFitRef.current
-      measuredFitRef.current = next
       measuringRef.current = false
-      if (!previous || !isSameDocumentPageFit(previous, next)) {
-        persistRef.current?.(next)
-      }
+      applySharedOrNatural({ ...nextType, scale }, boxWidth, boxHeight)
     }
 
     const start = () => {
@@ -107,8 +174,30 @@ export function useFitDocumentPageContent(
       }
       const saved = savedFitRef.current
       if (saved && canReuseDocumentPageFit(saved, boxWidth, boxHeight, caps)) {
-        applyDocumentPageFitVars(box, saved)
-        measuredFitRef.current = saved
+        if (documentId && pageNumber > 0) {
+          reportDocumentPageNaturalFit({
+            documentId,
+            pageNumber,
+            kind: fitKind,
+            fontSize: saved.fontSize,
+            caps,
+          })
+          const shared = getSharedDocumentPageFit(documentId, fitKind)
+          if (shared) {
+            commit(
+              withBox(
+                {
+                  ...shared,
+                  scale: saved.scale >= DOCUMENT_FIT_SCALE_MIN ? saved.scale : 1,
+                },
+                boxWidth,
+                boxHeight,
+              ),
+            )
+            return
+          }
+        }
+        commit(saved)
         return
       }
       measure()
@@ -131,19 +220,35 @@ export function useFitDocumentPageContent(
         return
       }
       if (isNegligibleDocumentFitBoxChange(measured, boxWidth, boxHeight)) return
+      // Keep 字号 stable on maximize / resize — only refresh recorded box size.
       const scaled = scaleDocumentPageFitForBox(measured, boxWidth, boxHeight, caps)
-      const next = { ...measured, ...scaled, boxWidth, boxHeight }
-      applyDocumentPageFitVars(box, next)
-      measuredFitRef.current = next
+      measuredFitRef.current = { ...measured, ...scaled, boxWidth, boxHeight }
+      applyDocumentPageFitVars(box, measuredFitRef.current)
     })
     observer.observe(box)
+
+    const unsubscribeShared = subscribeSharedDocumentPageFit(() => {
+      if (cancelled || measuringRef.current || !documentId) return
+      const shared = getSharedDocumentPageFit(documentId, fitKind)
+      const measured = measuredFitRef.current
+      if (!shared || !measured) return
+      if (Math.abs(shared.fontSize - measured.fontSize) < 0.15) return
+      commit(
+        withBox(
+          { ...shared, scale: 1 },
+          measured.boxWidth || box.clientWidth,
+          measured.boxHeight || box.clientHeight,
+        ),
+      )
+    })
 
     return () => {
       cancelled = true
       if (frame) window.cancelAnimationFrame(frame)
       observer.disconnect()
+      unsubscribeShared()
     }
-  }, [caps, contentKey, deferMeasure, enabled])
+  }, [caps, contentKey, deferMeasure, documentId, enabled, fitKind, pageNumber])
 
   return boxRef
 }

@@ -107,4 +107,19 @@ describe('document-page-bodies', () => {
     expect(display.translatedText).toBe(translated.translatedText)
     expect(display.parsedMarkdown).toBeUndefined()
   })
+
+  it('does not wipe live text with an empty HTML body while translating', () => {
+    const translating: DocumentPageState = {
+      pageNumber: 1,
+      sourceText: 'EPC FORM OF AGREEMENT',
+      translatedText: 'EPC FORM OF AGREEMENT',
+      parsedMarkdown: '<table><tr><td>EPC</td></tr></table>',
+      status: 'translating',
+    }
+    const body = toDocumentPageBody(translating.translatedText, translating.parsedMarkdown)
+    expect(body?.plain).toBe('')
+    const display = resolvePageForDisplay(translating, body, true)
+    expect(display.translatedText).toBe('EPC FORM OF AGREEMENT')
+    expect(display.status).toBe('translating')
+  })
 })

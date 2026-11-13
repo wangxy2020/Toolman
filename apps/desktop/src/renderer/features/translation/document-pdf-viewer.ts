@@ -6,7 +6,7 @@ import {
   type RenderTask,
 } from 'pdfjs-dist'
 import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
-import { PDF_VIEWER_PAGE_BATCH, resolvePdfViewerPageBatch } from './document-page-window'
+import { PDF_VIEWER_PAGE_BATCH } from './document-page-window'
 import { createPdfPaintBuffer } from './document-pdf-paint-buffer'
 import {
   PDF_VIEWER_PAINT_CACHE_LIMIT,
@@ -262,23 +262,35 @@ export async function prefetchPdfViewerPageRange(
 }
 
 export function prefetchPdfViewerPageBatch(filePath: string, currentPage: number, totalPages: number): void {
-  const current = resolvePdfViewerPageBatch(currentPage, totalPages)
-  void prefetchPdfViewerPageRange(filePath, current.startPage, current.endPage).catch(() => undefined)
-  const warmStart = Math.max(1, currentPage - 2)
-  const warmEnd = Math.min(totalPages, currentPage + 4)
+  // Warm only a tight window around the viewport — full batch prefetch on every
+  // page tick competed with paints and made scanned PDFs feel sticky.
+  const warmStart = Math.max(1, currentPage - 1)
+  const warmEnd = Math.min(totalPages, currentPage + 2)
   void prefetchPdfViewerPageRange(filePath, warmStart, warmEnd).catch(() => undefined)
-  if (currentPage < current.endPage - 1) return
-  const nextStart = current.endPage + 1
-  if (nextStart > totalPages) return
-  const next = resolvePdfViewerPageBatch(nextStart, totalPages)
-  void prefetchPdfViewerPageRange(filePath, next.startPage, next.endPage).catch(() => undefined)
+}
+
+function yieldPdfPaintToMain(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => {
+        setTimeout(resolve, 0)
+      })
+      return
+    }
+    setTimeout(resolve, 0)
+  })
 }
 
 async function paintPdfPage(job: RenderJob): Promise<void> {
   const { filePath, pageNumber, canvas, cssWidth, currentPage, allowSharp, signal } = job
   if (cssWidth < 1 || signal.aborted) return
+  // Let pending scroll/wheel handlers run before PDF.js work freezes the main thread.
+  await yieldPdfPaintToMain()
+  if (signal.aborted) return
   canvasTasks.get(canvas)?.cancel()
   const doc = await getPdfViewerDocument(filePath)
+  if (signal.aborted) return
+  await yieldPdfPaintToMain()
   if (signal.aborted) return
   const page = await doc.getPage(pageNumber)
   if (signal.aborted) return
@@ -303,18 +315,19 @@ async function paintPdfPage(job: RenderJob): Promise<void> {
   try {
     await task.promise
     if (signal.aborted) return
+    await yieldPdfPaintToMain()
+    if (signal.aborted) return
     buffer.blitTo(canvas)
-    const bitmap = await buffer.toImageBitmap()
-    if (bitmap) {
-      rememberPdfPaint(pdfViewerPaintCacheKey(filePath, pageNumber, cssWidth), {
-        bitmap,
-        width: buffer.width,
-        height: buffer.height,
-        quality,
-      })
-    } else {
+    // Cache from the visible canvas on idle — createImageBitmap on the paint
+    // buffer used to stall scroll while "正在加载文档预览" was on screen.
+    const scheduleCache =
+      typeof requestIdleCallback === 'function'
+        ? (fn: () => void) => requestIdleCallback(() => fn(), { timeout: 900 })
+        : (fn: () => void) => setTimeout(fn, 0)
+    scheduleCache(() => {
+      if (signal.aborted) return
       void cachePdfPagePaintFromCanvas(filePath, pageNumber, cssWidth, canvas, quality)
-    }
+    })
   } catch (error) {
     if (isPdfViewerRenderCancelled(error) || signal.aborted) return
     throw error

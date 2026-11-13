@@ -1,7 +1,7 @@
 /** Highest priority pending preview runs next; one render at a time. */
 export const PREVIEW_RENDER_DROPPED = 'PREVIEW_RENDER_DROPPED'
-/** Keep pending rasters within the prefetch window of the latest visible request. */
-export const PDF_PREVIEW_RETAIN_PAGES = 10
+/** Keep pending rasters within the window of the latest visible request. */
+export const PDF_PREVIEW_RETAIN_PAGES = 1
 
 export class PreviewRenderDroppedError extends Error {
   constructor() {
@@ -11,8 +11,10 @@ export class PreviewRenderDroppedError extends Error {
 }
 
 export function isPreviewRenderDropped(error: unknown): boolean {
-  return error instanceof PreviewRenderDroppedError ||
+  return (
+    error instanceof PreviewRenderDroppedError ||
     (error instanceof Error && error.message === PREVIEW_RENDER_DROPPED)
+  )
 }
 
 export type PreviewQueueJobOptions = {
@@ -47,7 +49,9 @@ function normalizeEnqueueOptions(
     group: priorityOrOptions.group ?? '',
     page: Math.max(0, Math.floor(priorityOrOptions.page ?? 0) || 0),
     retainAround:
-      priorityOrOptions.retainAround === undefined ? -1 : Math.max(0, Math.floor(priorityOrOptions.retainAround)),
+      priorityOrOptions.retainAround === undefined
+        ? -1
+        : Math.max(0, Math.floor(priorityOrOptions.retainAround)),
   }
 }
 
@@ -101,6 +105,19 @@ export function createPreviewRenderQueue() {
     }
   }
 
+  /** Drop every pending job for the file except the landed page (and optional ±radius). */
+  function dropExcept(group: string, page: number, retainAround = 0) {
+    if (!group || page < 1) return
+    const radius = Math.max(0, Math.floor(retainAround))
+    for (let index = items.length - 1; index >= 0; index -= 1) {
+      const item = items[index]!
+      if (item.group !== group || item.page < 1) continue
+      if (Math.abs(item.page - page) <= radius) continue
+      items.splice(index, 1)
+      item.reject(new PreviewRenderDroppedError())
+    }
+  }
+
   function enqueue<T>(task: () => Promise<T>, priorityOrOptions: number | PreviewQueueJobOptions = 0): Promise<T> {
     const options = normalizeEnqueueOptions(priorityOrOptions)
     dropStale(options.group, options.page, options.retainAround)
@@ -108,6 +125,7 @@ export function createPreviewRenderQueue() {
     if (options.key) {
       const existing = items.find((item) => item.key === options.key) as QueueItem<T> | undefined
       if (existing) {
+        // Promote prefetch → visible without a second raster (reuse in-flight).
         existing.priority = Math.max(existing.priority, options.priority)
         existing.seq = ++seq
         pump()
@@ -136,9 +154,20 @@ export function createPreviewRenderQueue() {
     return promise
   }
 
-  return { enqueue }
+  return { enqueue, dropExcept }
 }
 
-export function previewPriorityValue(priority: 'visible' | 'prefetch' | undefined): number {
-  return priority === 'prefetch' ? 1 : 2
+/**
+ * Higher runs first.
+ * - visible fast / immediate paint: 3
+ * - visible sharp upgrade: 2
+ * - prefetch: 1
+ */
+export function previewPriorityValue(
+  priority: 'visible' | 'prefetch' | undefined,
+  targetWidth = 0,
+): number {
+  if (priority === 'prefetch') return 1
+  if (targetWidth >= 900) return 2
+  return 3
 }

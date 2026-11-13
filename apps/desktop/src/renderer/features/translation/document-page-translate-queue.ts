@@ -5,9 +5,14 @@ import {
   sortQueueWithPriority,
   SOURCE_PREFETCH_BATCH,
   TRANSLATE_CONCURRENCY,
+  TRANSLATE_START_AHEAD,
+  toPlainTranslationSource,
 } from './document-page-parse-helpers'
 import type { DocumentPageRefs, DocumentPageSetters, DocumentPageState } from './document-page-types'
 import { isTranslationPageSourceInsufficient, NO_VALID_PAGE_TEXT } from './translation-page-source-quality'
+
+/** Wall-clock budget for one page translate (IPC + model). */
+export const PAGE_TRANSLATE_TIMEOUT_MS = 120_000
 
 interface TranslateQueueDeps {
   filePath: string | null
@@ -16,7 +21,7 @@ interface TranslateQueueDeps {
   autoDetectSource: boolean
   enabled: boolean
   refs: DocumentPageRefs
-  setters: Pick<DocumentPageSetters, 'setPages' | 'setTranslationArmed' | 'setParseArmed'>
+  setters: DocumentPageSetters
   updatePage: (pageNumber: number, patch: Partial<DocumentPageState>) => void
   loadPageSource: (pageNumber: number, generation: number) => Promise<string>
   scheduleSourcePrefetch: (anchorPage: number, generation: number) => void
@@ -29,11 +34,41 @@ interface TranslateQueueDeps {
   }) => Promise<{ text: string }>
 }
 
+function nextPendingTranslatePage(
+  pages: DocumentPageState[],
+  afterPage: number,
+): number | null {
+  const pending = pages
+    .filter(
+      (page) =>
+        page.pageNumber > afterPage &&
+        (page.status === 'idle' || page.status === 'error' || page.status === 'parsed'),
+    )
+    .sort((left, right) => left.pageNumber - right.pageNumber)
+  return pending[0]?.pageNumber ?? null
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(message)), ms)
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        window.clearTimeout(timer)
+        reject(error)
+      },
+    )
+  })
+}
+
 export function useDocumentPageTranslateQueue({
   filePath,
   modelId,
   languages,
-  autoDetectSource,
+  autoDetectSource: _autoDetectSource,
   enabled,
   refs,
   setters,
@@ -43,23 +78,49 @@ export function useDocumentPageTranslateQueue({
   prefetchPageSources,
   translate,
 }: TranslateQueueDeps) {
+  const enqueueNextTranslatePage = useCallback(
+    (afterPage: number) => {
+      if (!refs.translationArmedRef.current) return
+      const next = nextPendingTranslatePage(refs.pagesRef.current, afterPage)
+      if (next == null) return
+      if (refs.translateQueueRef.current.includes(next)) return
+      if (refs.translateInFlightRef.current.has(next)) return
+      enqueuePage(refs.translateQueueRef.current, next, false)
+    },
+    [refs],
+  )
+
   const executeTranslatePage = useCallback(
     async (pageNumber: number, generation: number) => {
-      if (!enabled || !filePath || !modelId) return
-
-      const current = refs.pagesRef.current.find((page) => page.pageNumber === pageNumber)
-      if (current?.status === 'done' && current.translatedText.trim()) return
-      if (current?.status === 'empty') return
-
-      scheduleSourcePrefetch(pageNumber, generation)
-
-      refs.inFlightRef.current.add(pageNumber)
+      // Always enter try/finally so a page marked translating cannot spin forever.
+      refs.translateInFlightRef.current.add(pageNumber)
+      refs.translatePageGenerationRef.current.set(pageNumber, generation)
       try {
-        const sourceText = current?.sourceText.trim()
+        if (!enabled || !filePath || !modelId) {
+          updatePage(pageNumber, {
+            status: 'error',
+            error: !modelId ? '未选择翻译模型' : '翻译未就绪',
+          })
+          return
+        }
+
+        const current = refs.pagesRef.current.find((page) => page.pageNumber === pageNumber)
+        if (current?.status === 'done' && current.translatedText.trim()) return
+        if (current?.status === 'empty') return
+
+        scheduleSourcePrefetch(pageNumber, generation)
+
+        const rawSource = current?.sourceText.trim()
           ? current.sourceText
           : await loadPageSource(pageNumber, generation)
         if (generation !== refs.generationRef.current) return
-        if (!sourceText.trim() || isTranslationPageSourceInsufficient(sourceText)) {
+
+        const sourceText = toPlainTranslationSource(rawSource)
+        if (sourceText && sourceText !== rawSource.trim()) {
+          updatePage(pageNumber, { sourceText })
+        }
+
+        if (!sourceText || isTranslationPageSourceInsufficient(sourceText)) {
           updatePage(pageNumber, {
             status: 'empty',
             translatedText: '',
@@ -70,27 +131,50 @@ export function useDocumentPageTranslateQueue({
         }
 
         updatePage(pageNumber, { status: 'translating', error: undefined })
-        const result = await translate({
-          text: sourceText,
-          modelId,
-          translationLanguages: languages,
-          autoDetectSource,
-        })
+        const result = await withTimeout(
+          translate({
+            text: sourceText,
+            modelId,
+            translationLanguages: languages,
+            // Document dual-pane (IMA-style): always detect so EN PDF → 中文.
+            autoDetectSource: true,
+          }),
+          PAGE_TRANSLATE_TIMEOUT_MS,
+          '翻译超时，请检查模型服务后重试',
+        )
         if (generation !== refs.generationRef.current) return
+        const translated = result.text.trim()
+        if (!translated) {
+          updatePage(pageNumber, {
+            status: 'error',
+            error: '翻译结果为空，请重试或更换模型',
+          })
+          enqueueNextTranslatePage(pageNumber)
+          return
+        }
         updatePage(pageNumber, {
           status: 'done',
-          translatedText: result.text,
+          translatedText: translated,
+          parsedMarkdown: undefined,
           error: undefined,
         })
+        enqueueNextTranslatePage(pageNumber)
       } catch (error) {
         if (generation !== refs.generationRef.current) return
         updatePage(pageNumber, {
           status: 'error',
           error: error instanceof Error ? error.message : 'translate failed',
         })
+        enqueueNextTranslatePage(pageNumber)
       } finally {
-        refs.inFlightRef.current.delete(pageNumber)
-        if (generation !== refs.generationRef.current) {
+        refs.translateInFlightRef.current.delete(pageNumber)
+        const ownedGeneration = refs.translatePageGenerationRef.current.get(pageNumber)
+        refs.translatePageGenerationRef.current.delete(pageNumber)
+        // Only idle a stuck page if THIS generation still owns it — never clobber a newer run.
+        if (
+          generation !== refs.generationRef.current &&
+          ownedGeneration === generation
+        ) {
           const stuck = refs.pagesRef.current.find((page) => page.pageNumber === pageNumber)
           if (stuck?.status === 'translating' || stuck?.status === 'loading-source') {
             updatePage(pageNumber, { status: 'idle', error: undefined })
@@ -99,8 +183,8 @@ export function useDocumentPageTranslateQueue({
       }
     },
     [
-      autoDetectSource,
       enabled,
+      enqueueNextTranslatePage,
       filePath,
       languages,
       loadPageSource,
@@ -127,6 +211,11 @@ export function useDocumentPageTranslateQueue({
         }
         if (batch.length === 0) break
         await Promise.all(batch.map((pageNumber) => executeTranslatePage(pageNumber, generation)))
+        if (refs.translationArmedRef.current && refs.translateQueueRef.current.length === 0) {
+          const focus = refs.focusPageRef.current ?? 1
+          const next = nextPendingTranslatePage(refs.pagesRef.current, focus - 1)
+          if (next != null) enqueuePage(refs.translateQueueRef.current, next, false)
+        }
       }
     } finally {
       refs.translateWorkerRunningRef.current = false
@@ -139,7 +228,7 @@ export function useDocumentPageTranslateQueue({
   const translatePage = useCallback(
     (pageNumber: number, priority = false) => {
       if (!enabled || !filePath || !modelId) return false
-      if (refs.inFlightRef.current.has(pageNumber)) return false
+      if (refs.translateInFlightRef.current.has(pageNumber)) return false
 
       const current = refs.pagesRef.current.find((page) => page.pageNumber === pageNumber)
       if (current?.status === 'done' && current.translatedText.trim()) return false
@@ -163,6 +252,9 @@ export function useDocumentPageTranslateQueue({
     refs.translateQueueRef.current = []
     refs.translateWorkerRunningRef.current = false
     refs.pageSourceLoadRef.current.clear()
+    refs.translateInFlightRef.current.clear()
+    refs.translatePageGenerationRef.current.clear()
+    refs.translationArmedRef.current = false
     setters.setTranslationArmed(false)
     setters.setPages((prev) => {
       const next = prev.map((page) =>
@@ -173,15 +265,28 @@ export function useDocumentPageTranslateQueue({
       refs.pagesRef.current = next
       return next
     })
-    refs.inFlightRef.current.clear()
   }, [refs, setters])
 
   const startTranslation = useCallback(() => {
     if (!modelId || refs.pagesRef.current.length === 0) return false
 
-    setters.setTranslationArmed(true)
-    setters.setParseArmed(false)
+    refs.generationRef.current += 1
     refs.ocrQueueRef.current = []
+    refs.ocrWorkerRunningRef.current = false
+    refs.centralOcrPipelineRef.current = false
+    refs.ocrExhaustedRef.current.clear()
+    refs.pageSourceLoadRef.current.clear()
+    refs.translateQueueRef.current = []
+    refs.translateWorkerRunningRef.current = false
+    refs.translateInFlightRef.current.clear()
+    refs.translatePageGenerationRef.current.clear()
+    refs.inFlightRef.current.clear()
+    setters.setOdlWarmRunning(false)
+    setters.setHybridBackfillRunning(false)
+    setters.setParseArmed(false)
+    refs.translationArmedRef.current = true
+    setters.setTranslationArmed(true)
+
     let resetPages = refs.pagesRef.current.map((page) => {
       if (page.status === 'empty') {
         return {
@@ -196,14 +301,31 @@ export function useDocumentPageTranslateQueue({
       if (page.status === 'translating' || page.status === 'loading-source') {
         return { ...page, status: 'idle' as const, error: undefined }
       }
+      if (page.status === 'parsed') {
+        const fromPreview = toPlainTranslationSource(
+          page.sourceText.trim() || page.parsedMarkdown || page.translatedText,
+        )
+        const sourceText = fromPreview || page.sourceText
+        // Keep English in parsedMarkdown for mid-translate preview; clear
+        // translatedText so「已解析」English is not mistaken for Chinese.
+        return {
+          ...page,
+          sourceText,
+          translatedText: '',
+          parsedMarkdown: page.parsedMarkdown || page.translatedText,
+          error: undefined,
+        }
+      }
       return page
     })
 
     let pending = resetPages.filter(
-      (page) => page.status === 'idle' || page.status === 'error',
+      (page) =>
+        page.status === 'idle' ||
+        page.status === 'error' ||
+        page.status === 'parsed',
     )
 
-    // Explicit translate click: re-translate when every page is already done.
     if (pending.length === 0) {
       resetPages = resetPages.map((page) => {
         if (page.status !== 'done') return page
@@ -227,17 +349,24 @@ export function useDocumentPageTranslateQueue({
     const pendingNumbers = pending.map((page) => page.pageNumber)
     sortQueueWithPriority(pendingNumbers, refs.focusPageRef.current)
     const firstPending = pendingNumbers[0]!
-    prefetchPageSources(
-      firstPending,
-      Math.min(
-        refs.totalPagesRef.current || resetPages.length,
-        firstPending + SOURCE_PREFETCH_BATCH - 1,
-      ),
-      generation,
+    const focus = refs.focusPageRef.current && refs.focusPageRef.current > 0
+      ? refs.focusPageRef.current
+      : firstPending
+    const immediate = pendingNumbers.filter(
+      (pageNumber) => pageNumber >= focus && pageNumber <= focus + TRANSLATE_START_AHEAD,
     )
+    const toQueue = immediate.length > 0 ? immediate : pendingNumbers.slice(0, TRANSLATE_START_AHEAD + 1)
+    const aheadStart = (toQueue[0] ?? firstPending) + 1
+    const aheadEnd = Math.min(
+      refs.totalPagesRef.current || resetPages.length,
+      (toQueue[0] ?? firstPending) + SOURCE_PREFETCH_BATCH - 1,
+    )
+    if (aheadStart <= aheadEnd) {
+      prefetchPageSources(aheadStart, aheadEnd, generation)
+    }
     let queued = 0
-    for (const pageNumber of pendingNumbers) {
-      if (translatePage(pageNumber)) queued += 1
+    for (const pageNumber of toQueue) {
+      if (translatePage(pageNumber, pageNumber === focus)) queued += 1
     }
     sortQueueWithPriority(refs.translateQueueRef.current, refs.focusPageRef.current)
     return queued > 0

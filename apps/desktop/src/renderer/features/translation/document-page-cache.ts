@@ -22,11 +22,48 @@ const sourceTextCache = new Map<string, string>()
 const pageTextCache = new Map<string, CachedPageText>()
 const parsePageCache = new Map<string, CachedParsePage>()
 const pageImageCache = new Map<string, string>()
-/** Keep visited preview rasters so scrolling back does not re-fetch. */
-export const MAX_PAGE_IMAGE_CACHE = 96
+/** Keep enough left-pane frames that flipping back 1–2 pages hits cache (no main render). */
+export const MAX_PAGE_IMAGE_CACHE = 24
 const previewImageInflight = new Map<string, Promise<string>>()
+const pageImageCacheListeners = new Set<() => void>()
+/** Keys currently shown in mounted left-pane slots — never revoke these blobs. */
+const pinnedPageImageKeys = new Map<string, number>()
 const MAX_PARSE_PAGE_CACHE = 2000
 const MAX_TRANSLATION_PAGE_CACHE = 2000
+
+function notifyPageImageCacheListeners() {
+  for (const listener of pageImageCacheListeners) {
+    try {
+      listener()
+    } catch {
+      // Listeners must not break cache writes.
+    }
+  }
+}
+
+/** Subscribe to left-pane raster cache inserts/evictions (prefetch → neighbor paint). */
+export function subscribePageImageCache(listener: () => void): () => void {
+  pageImageCacheListeners.add(listener)
+  return () => {
+    pageImageCacheListeners.delete(listener)
+  }
+}
+
+export function pinPageImageKey(key: string): void {
+  if (!key) return
+  pinnedPageImageKeys.set(key, (pinnedPageImageKeys.get(key) ?? 0) + 1)
+}
+
+export function unpinPageImageKey(key: string): void {
+  if (!key) return
+  const next = (pinnedPageImageKeys.get(key) ?? 0) - 1
+  if (next <= 0) pinnedPageImageKeys.delete(key)
+  else pinnedPageImageKeys.set(key, next)
+}
+
+function isPageImageKeyPinned(key: string): boolean {
+  return (pinnedPageImageKeys.get(key) ?? 0) > 0
+}
 
 export function parsePageCacheKey(documentId: string, pageNumber: number): string {
   return `${documentId}::parse:v5::${pageNumber}`
@@ -52,6 +89,28 @@ export function pageImageCacheKey(
   renderWidth: number,
 ): string {
   return `${filePath}::${pageNumber}::${renderWidth}`
+}
+
+/** Any cached raster for this page (any width) — used to avoid white remounts. */
+export function getAnyCachedPageImage(filePath: string, pageNumber: number): string | null {
+  const prefix = `${filePath}::${pageNumber}::`
+  let bestUrl: string | null = null
+  let bestWidth = -1
+  for (const [key, url] of pageImageCache) {
+    if (!key.startsWith(prefix)) continue
+    const widthPart = key.slice(prefix.length)
+    const width = Number.parseInt(widthPart, 10)
+    if (!Number.isFinite(width)) continue
+    if (width >= bestWidth) {
+      bestWidth = width
+      bestUrl = url
+    }
+  }
+  if (bestUrl && bestWidth >= 0) {
+    // Touch LRU for the winning key.
+    getCachedPageImage(pageImageCacheKey(filePath, pageNumber, bestWidth))
+  }
+  return bestUrl
 }
 
 export function getCachedSourceText(filePath: string, pageNumber: number): string | null {
@@ -121,12 +180,18 @@ export function setCachedPageImage(key: string, objectUrl: string): void {
   pageImageCache.delete(key)
   pageImageCache.set(key, objectUrl)
   while (pageImageCache.size > MAX_PAGE_IMAGE_CACHE) {
-    const oldestKey = pageImageCache.keys().next().value
-    if (!oldestKey) break
-    const oldestUrl = pageImageCache.get(oldestKey)
-    pageImageCache.delete(oldestKey)
-    if (oldestUrl) revokePageImageUrl(oldestUrl)
+    let evicted = false
+    for (const oldestKey of pageImageCache.keys()) {
+      if (isPageImageKeyPinned(oldestKey)) continue
+      const oldestUrl = pageImageCache.get(oldestKey)
+      pageImageCache.delete(oldestKey)
+      if (oldestUrl) revokePageImageUrl(oldestUrl)
+      evicted = true
+      break
+    }
+    if (!evicted) break
   }
+  notifyPageImageCacheListeners()
 }
 
 export function listCachedPageImageUrls(
@@ -164,6 +229,8 @@ export function clearPageImageCache(): void {
   for (const url of pageImageCache.values()) revokePageImageUrl(url)
   pageImageCache.clear()
   previewImageInflight.clear()
+  pinnedPageImageKeys.clear()
+  notifyPageImageCacheListeners()
 }
 
 /** Hydrate page slots from in-memory cache (survives scroll / remount within session). */

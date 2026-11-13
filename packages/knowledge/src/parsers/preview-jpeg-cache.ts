@@ -37,4 +37,8 @@ export function createPreviewJpegCache(limit: number) {
   }
 }
 
-export const previewJpegCache = createPreviewJpegCache(96)
+/**
+ * In-worker / in-process LRU. Main process also keeps a larger durable cache so a
+ * worker restart does not force full re-rasters of pages already painted.
+ */
+export const previewJpegCache = createPreviewJpegCache(32)

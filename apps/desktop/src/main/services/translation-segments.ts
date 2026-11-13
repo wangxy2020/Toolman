@@ -7,6 +7,36 @@ const MAX_SEGMENT_CHARS = 2000
  * - Only blank-line paragraphs are split boundaries (not single newlines).
  * - Long paragraphs are further split by sentence / hard wrap.
  */
+function extractLeadingTableUnit(text: string): { unit: string; rest: string } | null {
+  // Only when the table is at the start — prose-before-table is handled by the caller.
+  const leading = text.match(/^\s*/)![0]!.length
+  const fromStart = text.slice(leading)
+  const html = fromStart.match(/^<table\b[\s\S]*?<\/table>/i)
+  if (html) {
+    return {
+      unit: html[0],
+      rest: text.slice(leading + html[0].length).trim(),
+    }
+  }
+  // Keep contiguous GFM pipe-table blocks intact.
+  if (/^\s*\|.+\|\s*$/m.test(text)) {
+    const lines = text.split('\n')
+    const tableLines: string[] = []
+    let i = 0
+    while (i < lines.length && !lines[i]!.trim()) i += 1
+    while (i < lines.length && !/^\s*\|.+\|\s*$/.test(lines[i]!)) i += 1
+    if (i > 0 && lines.slice(0, i).some((line) => line.trim())) return null
+    while (i < lines.length && (/^\s*\|.+\|\s*$/.test(lines[i]!) || /^\s*\|?\s*:?-+:?\s*\|/.test(lines[i]!))) {
+      tableLines.push(lines[i]!)
+      i += 1
+    }
+    if (tableLines.length >= 2) {
+      return { unit: tableLines.join('\n'), rest: lines.slice(i).join('\n').trim() }
+    }
+  }
+  return null
+}
+
 export function splitTranslationSegments(text: string): string[] {
   const normalized = text.replace(/\r\n/g, '\n').trim()
   if (!normalized) return []
@@ -14,6 +44,26 @@ export function splitTranslationSegments(text: string): string[] {
   // One request for short inputs — avoids N serial LLM calls for word lists.
   if (normalized.length <= MAX_SEGMENT_CHARS) {
     return [normalized]
+  }
+
+  // Never bisect real tables — translate each table as one segment unit.
+  if (/<table\b/i.test(normalized) || /^\s*\|.+\|\s*$/m.test(normalized)) {
+    const segments: string[] = []
+    let rest = normalized
+    while (rest) {
+      const tableUnit = extractLeadingTableUnit(rest)
+      if (tableUnit) {
+        segments.push(tableUnit.unit)
+        rest = tableUnit.rest
+        continue
+      }
+      const nextTableAt = rest.search(/<table\b/i)
+      const prose = nextTableAt >= 0 ? rest.slice(0, nextTableAt).trim() : rest
+      if (prose) segments.push(...splitTranslationSegments(prose))
+      rest = nextTableAt >= 0 ? rest.slice(nextTableAt).trim() : ''
+      if (nextTableAt < 0) break
+    }
+    return segments.filter(Boolean)
   }
 
   const paragraphs = normalized

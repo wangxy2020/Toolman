@@ -12,10 +12,11 @@ describe('splitTranslationDisplayParagraphs', () => {
     expect(splitTranslationDisplayParagraphs('A\n\n\n\nB')).toEqual(['A', 'B'])
   })
 
-  it('keeps single-newline lists in one paragraph', () => {
-    expect(splitTranslationDisplayParagraphs('标题\na) 第一条\nb) 第二条')).toEqual([
-      '标题\na) 第一条\nb) 第二条',
-    ])
+  it('splits lettered list items into their own paragraphs', () => {
+    const parts = splitTranslationDisplayParagraphs('标题\na) 第一条\nb) 第二条')
+    expect(parts[0]).toBe('标题')
+    expect(parts.some((part) => part.startsWith('a)'))).toBe(true)
+    expect(parts.some((part) => part.startsWith('b)'))).toBe(true)
   })
 
   it('reflows wrapped body lines so the paragraph can fill the page width', () => {
@@ -34,6 +35,71 @@ describe('splitTranslationDisplayParagraphs', () => {
     expect(parts[0]).not.toContain('我方提及')
     expect(parts.some((part) => part.startsWith('我方提及'))).toBe(true)
   })
+
+  it('does not mash capital-start English paragraphs when periods are missing', () => {
+    const parts = splitTranslationDisplayParagraphs(
+      [
+        'The Employer will obtain the tax exemption certificates for the Contractor',
+        'Payment will be made according to the agreed milestone schedule',
+        'Work schedules for the contract period will be finalized later',
+      ].join('\n'),
+    )
+    expect(parts.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('does not mash long CJK paragraphs when sentence punctuation is missing', () => {
+    const parts = splitTranslationDisplayParagraphs(
+      [
+        '雇主将为承包商取得免税证明并配合办理相关手续',
+        '付款将按照双方同意的里程碑计划执行并及时结算',
+        '合同期内的施工进度计划将在后续会议中最终确认',
+      ].join('\n'),
+    )
+    expect(parts.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('does not treat date or quantity wraps as list headings', () => {
+    const parts = splitTranslationDisplayParagraphs(
+      [
+        'The meeting was held on',
+        '5 September 2026 by the parties present.',
+        'The contractor shall supply',
+        '10 copies of the drawings to the engineer.',
+      ].join('\n'),
+    )
+    expect(parts.some((part) => /^5 September/.test(part))).toBe(false)
+    expect(parts.some((part) => /^10 copies/.test(part))).toBe(false)
+    expect(parts.join(' ')).toContain('5 September 2026')
+    expect(parts.join(' ')).toContain('10 copies of the drawings')
+  })
+
+  it('splits roman-numeral negotiation items into separate paragraphs', () => {
+    const parts = splitTranslationDisplayParagraphs(
+      [
+        '3 DISCUSSION ON ISSUES OF NEGOTIATION',
+        'i. Power of Attorney: It was agreed that POA is provided.',
+        'ii. Performance Security: It was agreed that performance security will be issued.',
+        'iii. Environmental and Social Security: It was agreed that the ES security shall be issued.',
+        'iv. Sub-contractor: It was confirmed that local sub-contractors may be used.',
+      ].join('\n'),
+    )
+    expect(parts.length).toBeGreaterThanOrEqual(4)
+    expect(parts.some((part) => /^i\./i.test(part))).toBe(true)
+    expect(parts.some((part) => /^ii\./i.test(part))).toBe(true)
+    expect(parts.some((part) => /^iii\./i.test(part))).toBe(true)
+    expect(parts.some((part) => /^iv\./i.test(part))).toBe(true)
+  })
+
+  it('unpacks glued roman-numeral items from a single OCR line', () => {
+    const parts = splitTranslationDisplayParagraphs(
+      '1 Power of Attorney: It was agreed that POA is provided to present the company. ii Performance Security: It was agreed that performance security will be issued. iii Environmental and Social Security: It was agreed that the ES security shall be issued.',
+    )
+    expect(parts.length).toBeGreaterThanOrEqual(3)
+    expect(parts.some((part) => /\bii\b/i.test(part) && /Performance Security/i.test(part))).toBe(
+      true,
+    )
+    expect(parts.some((part) => /\biii\b/i.test(part) && /Environmental/i.test(part))).toBe(true)
+  })
 })
 
 describe('reflowTranslationDisplayLines', () => {
@@ -43,6 +109,45 @@ describe('reflowTranslationDisplayLines', () => {
         ['TBEA', 'No. 23, Chang\'an Road', '8th Sept 2026', 'Dear Sir,'].join('\n'),
       ),
     ).toBe(['TBEA', "No. 23, Chang'an Road", '8th Sept 2026', 'Dear Sir,'].join('\n'))
+  })
+
+  it('merges ODL one-token-per-line title pages into readable prose', () => {
+    const fragmented = [
+      '■',
+      'EPC/TURNKEY',
+      'FORM',
+      'OF',
+      'AGREEMENT',
+      'FOR',
+      'THE',
+      'AWARD',
+      'OF',
+      'EPC',
+      '/',
+      'TURNKEY',
+      'PROJECTS',
+      'PROJECT:',
+      'THE',
+      'KABANGA',
+      'NICKEL',
+      'PROJECT',
+      'LOCATED',
+      'IN',
+      'THE',
+      'NGARA',
+      'DISTRICT',
+      'EMPLOYER:',
+      'TEMBO',
+      'NICKEL',
+      'CORPORATION',
+      'LIMITED',
+    ].join('\n')
+    const reflowed = reflowTranslationDisplayLines(fragmented)
+    expect(reflowed).toContain('EPC/TURNKEY FORM OF AGREEMENT')
+    expect(reflowed).toContain('PROJECT: THE KABANGA NICKEL PROJECT')
+    expect(reflowed).toContain('EMPLOYER: TEMBO NICKEL CORPORATION LIMITED')
+    expect(reflowed.split('\n').length).toBeLessThan(10)
+    expect(reflowed).not.toMatch(/^■/m)
   })
 })
 
@@ -103,5 +208,23 @@ describe('withHtmlTextLineBreaks', () => {
     expect(withHtmlTextLineBreaks('<p><br>A<br></p><p><br></p><p>B<br><br>C</p>')).toBe(
       '<p>A</p><p>B<br>C</p>',
     )
+  })
+
+  it('collapses OCR newlines inside table cells instead of stacking <br>', () => {
+    const html =
+      '<table><tr><th>Item</th><th>Entry</th></tr>' +
+      '<tr><td>Name</td><td>Tembo\nNickel\nProject</td></tr></table>'
+    const next = withHtmlTextLineBreaks(html)
+    expect(next).toContain('<td>Tembo Nickel Project</td>')
+    expect(next).not.toContain('<br>')
+  })
+
+  it('still hard-breaks letter-head prose outside tables', () => {
+    const html =
+      '<p>TBEA\nNo. 23</p><table><tr><td>A\nB</td></tr></table><p>8th Sept 2026\nDear Sir</p>'
+    const next = withHtmlTextLineBreaks(html)
+    expect(next).toContain('<p>TBEA<br>No. 23</p>')
+    expect(next).toContain('<td>A B</td>')
+    expect(next).toContain('<p>8th Sept 2026<br>Dear Sir</p>')
   })
 })

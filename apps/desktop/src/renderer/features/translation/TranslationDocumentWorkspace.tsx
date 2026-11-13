@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useMemo } from 'react'
+import { forwardRef, useCallback, useEffect, useMemo } from 'react'
 import { IconPlus } from '../../components/icons'
 import { useI18n } from '../../i18n/useI18n'
 import { documentWindowSpacersFromHeights } from './document-page-window'
@@ -6,6 +6,7 @@ import { getPageRemark } from './document-page-remarks'
 import { createDocumentPageBodyLookup } from './document-page-bodies'
 import type { DocumentPageFitRecord } from './document-page-fit'
 import { setCachedPageFit } from './document-page-fit-cache'
+import { clearSharedDocumentPageFits } from './document-page-fit-shared'
 import { resolveParseBodyAttachFlags } from './document-page-preview-policy'
 import { usePdfPreviewPolicy } from './usePdfPreviewPolicy'
 import { TranslationDocumentPageRow } from './TranslationDocumentPageRow'
@@ -55,12 +56,15 @@ export const TranslationDocumentWorkspace = forwardRef<
     getRowHeight,
     reportHeight,
     handleEnsurePage,
+    handleRetryTranslate,
   } = useTranslationDocumentWorkspace({ ...props, pageZoom, ref })
   const isPdf = isPdfPath(activeDocument?.filePath ?? '')
   const { isPreviewActive, markPageReady, cacheEpoch } = usePdfPreviewPolicy(
     currentPage,
     resolvedTotalPages,
     isPdf ? activeDocument?.filePath ?? null : null,
+    pageBox.width,
+    scrollSettled,
   )
   const bodyLookup = useMemo(
     () => createDocumentPageBodyLookup(activeDocument?.pageSnapshots, pages, activeDocument?.id),
@@ -73,6 +77,11 @@ export const TranslationDocumentWorkspace = forwardRef<
     },
     [activeDocument?.id],
   )
+  useEffect(() => {
+    const id = activeDocument?.id
+    if (!id) return
+    return () => clearSharedDocumentPageFits(id)
+  }, [activeDocument?.id])
   const handleRemarkClose = useCallback(() => onRemarkOpenPageChange?.(null), [onRemarkOpenPageChange])
   const handleRemarkOpen = useCallback(
     (pageNumber: number) => onRemarkOpenPageChange?.(pageNumber),
@@ -170,6 +179,7 @@ export const TranslationDocumentWorkspace = forwardRef<
             cacheEpoch={cacheEpoch}
             onPreviewReady={markPageReady}
             onEnsurePage={handleEnsurePage}
+            onRetryTranslate={handleRetryTranslate}
             onRowHeight={reportHeight}
             remarkOpen={remarkOpenPage === page.pageNumber}
             remarkText={getPageRemark(activeDocument.pageRemarks, page.pageNumber)}
@@ -177,6 +187,7 @@ export const TranslationDocumentWorkspace = forwardRef<
             onRemarkClose={onRemarkOpenPageChange ? handleRemarkClose : undefined}
             onRemarkOpen={onRemarkOpenPageChange ? handleRemarkOpen : undefined}
             onFitPersist={isPdf ? handleFitPersist : undefined}
+            documentId={activeDocument.id}
             />
           )
         })}

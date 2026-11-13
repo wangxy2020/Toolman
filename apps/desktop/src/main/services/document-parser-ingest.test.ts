@@ -127,6 +127,36 @@ describe('isOdlIngestResultInsufficient', () => {
       }),
     ).toBe(false)
   })
+
+  it('does not false-flag a 2-page progressive preview of an 80-page digital PDF', () => {
+    const page1 = [
+      'EPC/TURNKEY FORM OF AGREEMENT FOR THE AWARD OF EPC / TURNKEY PROJECTS.',
+      'PROJECT: THE KABANGA NICKEL PROJECT LOCATED IN THE NGARA DISTRICT OF THE KAGERA REGION.',
+      'EMPLOYER: TEMBO NICKEL CORPORATION LIMITED (TNCL) agrees to the following terms.',
+      'This Agreement is based on the FIDIC Conditions of Contract for EPC/TURNKEY PROJECTS, 2017.',
+      'The Parties acknowledge that the Employer has selected the Contractor to design and build the Works.',
+    ].join(' ')
+    const page2 = [
+      'SECTION 1.0 CONTRACT AGREEMENT. The Parties agree that the Contract Documents',
+      'listed in the Appendix form the entire agreement between the Employer and the Contractor',
+      'and supersede all prior negotiations, representations, and agreements relating thereto.',
+      'The Commencement Date shall be the date notified by the Employer in accordance with Clause 8.1.',
+      'Nothing in this Agreement shall reduce the Contractor obligations under the Conditions of Contract.',
+    ].join(' ')
+    const result = {
+      backend: 'opendataloader' as const,
+      totalPages: 80,
+      plainText: `【第 1 页】\n${page1}\n【第 2 页】\n${page2}`,
+      markdown: `【第 1 页】\n${page1}\n【第 2 页】\n${page2}`,
+      pages: [
+        { pageNumber: 1, text: page1, markdown: page1 },
+        { pageNumber: 2, text: page2, markdown: page2 },
+      ],
+    }
+    // Explicit pageSpan matches progressive batch size (never use totalPages=80).
+    expect(isOdlIngestResultInsufficient(result, { pageSpan: 2 })).toBe(false)
+    expect(isOdlIngestResultInsufficient(result)).toBe(false)
+  })
 })
 
 describe('hybridShouldAbortRemainingBatches', () => {

@@ -2285,6 +2285,11 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
   min-height: 0;
   height: 100%;
   overflow: hidden;
+  border-radius: 2px;
+  background: #fff;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.06),
+    0 8px 24px rgba(15, 23, 42, 0.08);
 }
 
 .tm-translation-doc-row--paired .tm-translation-doc-page-card-body {
@@ -2292,10 +2297,102 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
   overflow: hidden;
 }
 
+.tm-translation-doc-row--paired .tm-translation-doc-page-card-foot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 6px 12px 10px;
+  border-top: 1px solid var(--tm-border-light);
+  color: var(--tm-text-muted);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0), #fafafa 40%);
+}
+
+.tm-translation-doc-page-card-status--parsing,
+.tm-translation-doc-page-card-status--translating {
+  color: var(--tm-accent, #2563eb);
+}
+
+.tm-translation-doc-page-card-status--done,
+.tm-translation-doc-page-card-status--parsed {
+  color: var(--tm-success, #15803d);
+}
+
+.tm-translation-doc-page-card-status--error {
+  color: var(--tm-danger, #b91c1c);
+}
+
+.tm-translation-doc-page-card-retry {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--tm-accent, #2563eb);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.tm-translation-doc-page-card-retry:hover {
+  color: var(--tm-text);
+}
+
+.tm-translation-doc-page-card-body--layout {
+  position: relative;
+  padding: 0;
+}
+
+.tm-translation-doc-layout-pane {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  box-sizing: border-box;
+}
+
+.tm-translation-doc-layout-block {
+  position: absolute;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 0.15em 0.25em;
+  font-family: Georgia, 'Times New Roman', 'Songti SC', 'SimSun', serif;
+  font-size: 0.92em;
+  line-height: 1.35;
+  color: var(--tm-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.tm-translation-doc-layout-block--title {
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 0.03em;
+}
+
+.tm-translation-doc-layout-block--field {
+  font-size: 0.88em;
+}
+
+.tm-translation-doc-layout-block--table {
+  font-size: 0.82em;
+  line-height: 1.25;
+}
+
 .tm-translation-doc-page-card-body--fit {
-  font-size: var(--tm-doc-fit-font, 18px);
-  line-height: var(--tm-doc-fit-lead, 1.55);
-  padding: var(--tm-doc-fit-pad, 16px) calc(var(--tm-doc-fit-pad, 16px) + 2px) var(--tm-doc-fit-pad, 16px);
+  font-size: var(--tm-doc-fit-font, 15px);
+  line-height: var(--tm-doc-fit-lead, 1.5);
+  padding: var(--tm-doc-fit-pad, 14px) calc(var(--tm-doc-fit-pad, 14px) + 2px) var(--tm-doc-fit-pad, 14px);
+  /* Prefer readable type + in-page scroll over crushing below fontMin. */
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  max-height: 100%;
 }
 
 .tm-translation-doc-page-card-body--fit-table {
@@ -2309,6 +2406,7 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
   transform-origin: top left;
   width: calc(100% / var(--tm-doc-fit-scale, 1));
   max-width: calc(100% / var(--tm-doc-fit-scale, 1));
+  overflow: visible;
   box-sizing: border-box;
 }
 
@@ -2369,6 +2467,7 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
 }
 
 .tm-translation-doc-page-image-wrap {
+  position: relative;
   width: 100%;
   height: 100%;
   display: flex;
@@ -2383,6 +2482,8 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
   height: 100%;
   object-fit: contain;
   background: #fff;
+  /* Prefer smooth upscale of the settled hi-res raster over chrome's default softening. */
+  image-rendering: auto;
 }
 
 .tm-translation-doc-page-image-status,
@@ -2400,17 +2501,22 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
   text-align: center;
   background: var(--tm-bg);
   box-sizing: border-box;
+  /* Loading placeholders must not steal wheel/touch from the document scroller. */
+  pointer-events: none;
 }
 
 .tm-translation-doc-page-image-status--error,
 .tm-translation-doc-pages-status--error {
   color: #b42318;
+  pointer-events: auto;
 }
 
 .tm-translation-doc-page-image-status--overlay {
   position: absolute;
   inset: 0;
   background: color-mix(in srgb, #fff 86%, transparent);
+  /* Never trap wheel/touch — loading preview used to freeze document scroll. */
+  pointer-events: none;
 }
 
 .tm-translation-doc-page-image-status p,
@@ -2577,8 +2683,8 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
   width: 100%;
   max-width: 100%;
   font-family: Georgia, 'Times New Roman', 'Songti SC', 'SimSun', serif;
-  font-size: 18px;
-  line-height: 1.55;
+  font-size: 15px;
+  line-height: 1.5;
   color: var(--tm-text);
 }
 
@@ -2613,6 +2719,21 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
   margin-top: 0;
 }
 
+.tm-translation-doc-page-heading--center {
+  text-align: center;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+}
+
+.tm-translation-doc-page-card-text:has(.tm-translation-doc-page-heading--center) {
+  text-align: center;
+}
+
+.tm-translation-doc-page-card-text:has(.tm-translation-doc-page-heading--center) .tm-translation-doc-page-meta,
+.tm-translation-doc-page-card-text:has(.tm-translation-doc-page-heading--center) .tm-translation-doc-page-para {
+  text-align: center;
+}
+
 .tm-translation-doc-page-meta {
   margin: 0 0 0.85em;
   width: 100%;
@@ -2632,9 +2753,15 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
   min-width: 0;
   width: 100%;
   max-width: 100%;
-  font-size: 18px;
-  line-height: 1.55;
+  font-size: 15px;
+  line-height: 1.5;
   color: var(--tm-text);
+}
+
+.tm-translation-doc-markdown img {
+  max-width: 100%;
+  height: auto;
+  display: block;
 }
 
 .tm-translation-doc-markdown :is(h1, h2, h3, h4, h5, h6, p, div, span, li, td, th, font, b, strong, em, a, section, article) {
@@ -2694,11 +2821,20 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
 .tm-translation-doc-table {
   width: 100%;
   max-width: 100%;
-  table-layout: fixed;
+  /* Content-sized columns for Contract Data / schedules; avoid 8%-narrow first cols. */
+  table-layout: auto;
   border-collapse: collapse;
   font-size: inherit;
   line-height: inherit;
   box-sizing: border-box;
+}
+
+/* Only tight 2-column label/value pairs use fixed proportions. */
+.tm-translation-doc-markdown table:has(tr > :nth-child(2):last-child):not(:has(tr > :nth-child(3))),
+.tm-translation-doc-table:has(tr > :nth-child(2):last-child):not(:has(tr > :nth-child(3))):not(
+    .tm-translation-doc-table--flow
+  ) {
+  table-layout: fixed;
 }
 
 .tm-translation-doc-markdown col,
@@ -2717,13 +2853,25 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
   vertical-align: top;
   white-space: normal !important;
   overflow-wrap: break-word;
-  word-break: normal;
+  word-break: break-word;
   hyphens: none;
+  max-width: none;
+}
+
+/* max-width:0 only for true fixed 2-col label/value grids — never for --flow
+   or auto multi-col tables (that crushed body cells into one-character stacks). */
+.tm-translation-doc-markdown table:has(tr > :nth-child(2):last-child):not(:has(tr > :nth-child(3)))
+  :is(th, td),
+.tm-translation-doc-table:has(tr > :nth-child(2):last-child):not(:has(tr > :nth-child(3))):not(
+    .tm-translation-doc-table--flow
+  )
+  :is(th, td) {
+  max-width: 0;
 }
 
 .tm-translation-doc-markdown :is(th, td) p {
   overflow-wrap: break-word;
-  word-break: normal;
+  word-break: break-word;
 }
 
 .tm-translation-doc-markdown table:has(tr > :nth-child(2):last-child) :is(th, td):nth-child(1),
@@ -2736,45 +2884,98 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
   width: 64%;
 }
 
-.tm-translation-doc-markdown table:has(tr > :nth-child(3):last-child) :is(th, td):nth-child(1),
-.tm-translation-doc-table:has(tr > :nth-child(3):last-child) :is(th, td):nth-child(1) {
-  width: 8%;
+/* S/N · 序号 · No. — keep the index column narrow. */
+.tm-translation-doc-table--sn-first,
+.tm-translation-doc-markdown table.tm-translation-doc-table--sn-first {
+  table-layout: fixed;
+}
+
+.tm-translation-doc-table--sn-first :is(th, td):first-child,
+.tm-translation-doc-markdown table.tm-translation-doc-table--sn-first :is(th, td):first-child {
+  width: 3.25em;
+  max-width: 4em;
   white-space: nowrap !important;
+  text-align: center;
+}
+
+.tm-translation-doc-table--sn-first:has(tr > :nth-child(3):last-child) :is(th, td):nth-child(2),
+.tm-translation-doc-markdown
+  table.tm-translation-doc-table--sn-first:has(tr > :nth-child(3):last-child)
+  :is(th, td):nth-child(2) {
+  width: 28%;
+}
+
+.tm-translation-doc-table--sn-first:has(tr > :nth-child(3):last-child) :is(th, td):nth-child(3),
+.tm-translation-doc-markdown
+  table.tm-translation-doc-table--sn-first:has(tr > :nth-child(3):last-child)
+  :is(th, td):nth-child(3) {
+  width: auto;
+}
+
+/* 3-col Contract Data (Item / Sub-Clause / Entry): balanced, content-friendly. */
+.tm-translation-doc-markdown table:has(tr > :nth-child(3):last-child),
+.tm-translation-doc-table:has(tr > :nth-child(3):last-child) {
+  table-layout: fixed;
+}
+
+.tm-translation-doc-markdown table:has(tr > :nth-child(3):last-child):not(.tm-translation-doc-table--sn-first)
+  :is(th, td):nth-child(1),
+.tm-translation-doc-table:has(tr > :nth-child(3):last-child):not(.tm-translation-doc-table--sn-first)
+  :is(th, td):nth-child(1) {
+  width: 30%;
+  max-width: none;
 }
 
 .tm-translation-doc-markdown table:has(tr > :nth-child(3):last-child) :is(th, td):nth-child(2),
 .tm-translation-doc-table:has(tr > :nth-child(3):last-child) :is(th, td):nth-child(2) {
-  width: 24%;
+  width: 18%;
+  max-width: none;
 }
 
 .tm-translation-doc-markdown table:has(tr > :nth-child(3):last-child) :is(th, td):nth-child(3),
 .tm-translation-doc-table:has(tr > :nth-child(3):last-child) :is(th, td):nth-child(3) {
-  width: 68%;
+  width: 52%;
+  max-width: none;
+}
+
+.tm-translation-doc-markdown table:has(tr > :nth-child(4):last-child),
+.tm-translation-doc-table:has(tr > :nth-child(4):last-child) {
+  table-layout: fixed;
 }
 
 .tm-translation-doc-markdown table:has(tr > :nth-child(4):last-child) :is(th, td):nth-child(1),
 .tm-translation-doc-table:has(tr > :nth-child(4):last-child) :is(th, td):nth-child(1) {
-  width: 9%;
+  width: 14%;
+  max-width: none;
 }
 
 .tm-translation-doc-markdown table:has(tr > :nth-child(4):last-child) :is(th, td):nth-child(2),
 .tm-translation-doc-table:has(tr > :nth-child(4):last-child) :is(th, td):nth-child(2) {
-  width: 30%;
+  width: 28%;
+  max-width: none;
 }
 
 .tm-translation-doc-markdown table:has(tr > :nth-child(4):last-child) :is(th, td):nth-child(3),
 .tm-translation-doc-table:has(tr > :nth-child(4):last-child) :is(th, td):nth-child(3) {
-  width: 11%;
+  width: 18%;
+  max-width: none;
 }
 
 .tm-translation-doc-markdown table:has(tr > :nth-child(4):last-child) :is(th, td):nth-child(4),
 .tm-translation-doc-table:has(tr > :nth-child(4):last-child) :is(th, td):nth-child(4) {
-  width: 50%;
+  width: 40%;
+  max-width: none;
+}
+
+.tm-translation-doc-markdown table:has(tr > :nth-child(5):last-child),
+.tm-translation-doc-table:has(tr > :nth-child(5):last-child) {
+  table-layout: fixed;
 }
 
 .tm-translation-doc-markdown table:has(tr > :nth-child(5):last-child) :is(th, td),
 .tm-translation-doc-table:has(tr > :nth-child(5):last-child) :is(th, td) {
   width: 20%;
+  max-width: none;
 }
 
 .tm-translation-doc-table-wrap {
@@ -2791,8 +2992,13 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
   margin-bottom: 0;
 }
 
+.tm-translation-doc-table.tm-translation-doc-table--flow {
+  table-layout: auto;
+}
+
 .tm-translation-doc-table.tm-translation-doc-table--flow :is(th, td) {
   width: auto !important;
+  max-width: none;
 }
 
 .tm-translation-doc-table-cell--num {

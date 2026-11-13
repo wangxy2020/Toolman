@@ -1,12 +1,16 @@
 import {
+  DOCUMENT_PAGE_FIT_PROSE_CAPS,
+  DOCUMENT_PAGE_FIT_TABLE_CAPS,
   splitDocumentPageFitMarkdown,
   type DocumentPageFitRecord,
 } from './document-page-fit'
 import { getCachedPageFit, setCachedPageFit } from './document-page-fit-cache'
+import { seedDocumentPageNaturalFit } from './document-page-fit-shared'
 import {
   hasVisibleParsePreviewBody,
   htmlPreviewToVisibleText,
   resolveParsePreviewKind,
+  usesDocumentPageTableFit,
   type ParsePreviewKind,
 } from './translation-page-source-quality'
 import type { DocumentPageState } from './document-page-types'
@@ -35,8 +39,16 @@ export function toDocumentPageBody(
   const fit =
     split.fit ??
     (options?.pageNumber ? getCachedPageFit(options.documentId, options.pageNumber) : null)
-  if (split.fit && options?.documentId && options.pageNumber) {
-    setCachedPageFit(options.documentId, options.pageNumber, split.fit)
+  if (fit && options?.documentId && options.pageNumber) {
+    setCachedPageFit(options.documentId, options.pageNumber, fit)
+    const table = usesDocumentPageTableFit(bodyMarkdown) || usesDocumentPageTableFit(bodyPlain)
+    seedDocumentPageNaturalFit({
+      documentId: options.documentId,
+      pageNumber: options.pageNumber,
+      kind: table ? 'table' : 'prose',
+      fontSize: fit.fontSize,
+      caps: table ? DOCUMENT_PAGE_FIT_TABLE_CAPS : DOCUMENT_PAGE_FIT_PROSE_CAPS,
+    })
   }
   if (kind === 'html') {
     return { kind, plain: '', markdown: bodyMarkdown, ...(fit ? { fit } : {}) }
@@ -111,10 +123,19 @@ export function resolvePageForDisplay(
     }
   }
   if (!body) return page
-  if (page.status === 'done' && page.translatedText.trim()) {
+  // Live translation / done pages must keep their own text — body.plain is often
+  // empty for ODL HTML and was wiping the Chinese result from the right pane.
+  if (
+    page.status === 'done' ||
+    page.status === 'translating' ||
+    page.status === 'loading-source' ||
+    page.status === 'error'
+  ) {
     return {
       ...page,
-      parsedMarkdown: undefined,
+      ...(page.status === 'done' && page.translatedText.trim()
+        ? { parsedMarkdown: undefined }
+        : {}),
     }
   }
   return {

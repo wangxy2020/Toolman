@@ -1,9 +1,12 @@
-/** Mount enough neighbors that a normal flip does not remount the previous page. */
-export const DOCUMENT_PAGE_OVERSCAN = 3
+/**
+ * Mount current ±1 only. Larger overscan (3 → 7 dual-pane rows) made scanned
+ * PDF flips stutter from ResizeObserver + canvas + right-pane fit work.
+ */
+export const DOCUMENT_PAGE_OVERSCAN = 1
 /** First page and later pages keep the same mounted row count (current ± overscan, shifted at the ends). */
 export const DOCUMENT_PAGE_WINDOW_SIZE = DOCUMENT_PAGE_OVERSCAN * 2 + 1
-/** Prefetch/page-object warm batch only — mounted PDF rows use DOCUMENT_PAGE_OVERSCAN. */
-export const PDF_VIEWER_PAGE_BATCH = 10
+/** Prefetch/page-object warm batch only — keep small so scroll does not fight paints. */
+export const PDF_VIEWER_PAGE_BATCH = 4
 export const DOCUMENT_ROW_PANE_PAD_TOP = 12
 export const DOCUMENT_ROW_GAP = 16
 export const MIN_MEASURED_ROW_HEIGHT = 48

@@ -1,16 +1,26 @@
 import { describe, expect, it } from 'vitest'
 import {
+  gfmTablesToHtml,
   hasGfmTableMarkup,
   hasVisibleParsePreviewBody,
   htmlPreviewToVisibleText,
+  isLayoutGfmTable,
+  isLayoutHtmlTable,
   isRichMarkdownPreview,
   isTranslationPageSourceInsufficient,
+  chunkPipeCellsIntoRows,
+  markSerialNumberTableColumns,
+  mergeTrailingPipeRowsIntoHtmlTables,
+  normalizeGfmTableMarkup,
+  promoteOrphanPipeRowsToHtmlTables,
+  repairDocumentPreviewTables,
   resolveDocumentPageDisplayText,
   resolveParsePreviewKind,
   sanitizeDocumentPreviewHtml,
   usesDocumentPageTableFit,
   usesRichDocumentPagePreview,
 } from './translation-page-source-quality'
+// isLayoutGfmTable exercised via usesRichDocumentPagePreview / resolveDocumentPageDisplayText
 
 describe('isTranslationPageSourceInsufficient', () => {
   it('rejects empty text', () => {
@@ -92,6 +102,70 @@ describe('isRichMarkdownPreview', () => {
     expect(htmlPreviewToVisibleText(html)).toContain('Time for Completion')
   })
 
+  it('flattens ODL layout tables instead of rendering a crushed rich grid', () => {
+    const html = [
+      '<table><tr>',
+      '<td>SECTION</td><td></td><td></td><td></td><td></td><td></td>',
+      '</tr><tr>',
+      '<td>1.0</td><td></td><td>CONTRACT</td><td></td><td>AGREEMENT</td><td></td>',
+      '</tr></table>',
+    ].join('')
+    expect(isLayoutHtmlTable(html)).toBe(true)
+    expect(usesRichDocumentPagePreview(html)).toBe(false)
+    expect(usesDocumentPageTableFit(html)).toBe(false)
+    expect(isRichMarkdownPreview(html, html)).toBe(false)
+    const plain = resolveDocumentPageDisplayText(html, false)
+    expect(plain).toContain('SECTION')
+    expect(plain).toContain('CONTRACT AGREEMENT')
+    expect(plain).not.toContain('<table')
+  })
+
+  it('keeps real 3–4 column data tables on the rich path', () => {
+    const html = [
+      '<table><tr><th>Item</th><th>Description</th><th>Amount</th></tr>',
+      '<tr><td>1</td><td>Time for Completion</td><td>730 days</td></tr>',
+      '<tr><td>2</td><td>Defects Notification</td><td>365 days</td></tr>',
+      '</table>',
+    ].join('')
+    expect(isLayoutHtmlTable(html)).toBe(false)
+    expect(usesRichDocumentPagePreview(html)).toBe(true)
+    expect(usesDocumentPageTableFit(html)).toBe(true)
+  })
+
+  it('flattens sparse cover-page GFM dumps instead of showing pipe noise', () => {
+    const gfm = ['|1', 'EPC/TURNKEY', '| |--- |', 'FORM OF AGREEMENT'].join('\n')
+    expect(usesRichDocumentPagePreview(gfm)).toBe(false)
+    const plain = resolveDocumentPageDisplayText(gfm, false)
+    expect(plain).toContain('EPC/TURNKEY')
+    expect(plain).toContain('FORM OF AGREEMENT')
+    expect(plain).not.toContain('|')
+    expect(plain).not.toContain('---')
+  })
+
+  it('keeps real Contract Data GFM tables on the rich path', () => {
+    const table = [
+      '| Item | Sub-Clause | Entry |',
+      '| --- | --- | --- |',
+      "| Employer's name and address | 1.1.27 | Tembo Nickel |",
+      '| Time for Completion | 1.1.84 | 730 days |',
+    ].join('\n')
+    expect(usesRichDocumentPagePreview(table)).toBe(true)
+    expect(usesDocumentPageTableFit(table)).toBe(true)
+  })
+
+  it('normalizes compacted one-line ODL tables into HTML grids', () => {
+    const jammed =
+      "|Item|Sub-Clause|Entry| |---|---|---| |Employer's name and address|1.1.27 & 1.3 (d)|Tembo Nickel|"
+    expect(hasGfmTableMarkup(jammed)).toBe(true)
+    const normalized = normalizeGfmTableMarkup(jammed)
+    expect(normalized.split('\n').length).toBeGreaterThanOrEqual(3)
+    const html = gfmTablesToHtml(jammed)
+    expect(html).toContain('<table')
+    expect(html).toContain('<th>')
+    expect(html).toContain('Employer')
+    expect(html).not.toMatch(/\|---\|/)
+  })
+
   it('does not use the table 字号 cap for letter HTML', () => {
     expect(usesDocumentPageTableFit('<p>Dear Sir,</p>')).toBe(false)
   })
@@ -109,6 +183,8 @@ describe('sanitizeDocumentPreviewHtml', () => {
     const html = '<table onclick="alert(1)"><tr><td>OK</td></tr></table><script>alert(1)</script>'
     const sanitized = sanitizeDocumentPreviewHtml(html)
     expect(sanitized).toContain('<table')
+    expect(sanitized).toContain('tm-translation-doc-table-wrap')
+    expect(sanitized).toContain('tm-translation-doc-table')
     expect(sanitized).toContain('OK')
     expect(sanitized).not.toContain('script')
     expect(sanitized).not.toContain('onclick')
@@ -123,6 +199,7 @@ describe('sanitizeDocumentPreviewHtml', () => {
     expect(sanitized).not.toContain('22pt')
     expect(sanitized).toContain('22.')
     expect(sanitized).toContain('Body')
+    expect(sanitized).toContain('tm-translation-doc-table-wrap')
   })
 
   it('strips leftover ODL font sizing so parse HTML uses the page type', () => {
@@ -131,5 +208,145 @@ describe('sanitizeDocumentPreviewHtml', () => {
     expect(sanitized).not.toContain('22pt')
     expect(sanitized).not.toContain('size=')
     expect(sanitized).toContain('Hello')
+  })
+
+  it('merges trailing pipe rows into the preceding HTML table and marks S/N', () => {
+    const html = [
+      '<table><thead><tr><th>S/N</th><th>Issue</th><th>RECORD OF NEGOTIATIONS</th></tr></thead>',
+      '<tbody>',
+      '<tr><td>5</td><td>Tax Exemption</td><td>The Employer will obtain.</td></tr>',
+      '<tr><td>7</td><td>Payment Terms</td><td>Payment will be made.</td></tr>',
+      '</tbody></table>',
+      '| |Work schedules (Contract Period)|It was confirmed that the Work Schedule will be agreed.|',
+      '|9|Contractor Inputs|Contractor to avoid idle plant.|',
+      '|10|Scope of the Work|It was that the scope of works was confirmed.|',
+    ].join('\n')
+    const sanitized = sanitizeDocumentPreviewHtml(html)
+    expect(sanitized).toContain('tm-translation-doc-table--sn-first')
+    expect(sanitized).toContain('Work schedules (Contract Period)')
+    expect(sanitized).toContain('>9</td>')
+    expect(sanitized).toContain('>10</td>')
+    expect(sanitized).not.toMatch(/\|\s*9\s*\|/)
+    expect(sanitized).not.toMatch(/\|\s*10\s*\|/)
+  })
+
+  it('merges jammed one-line continuation pipes (ODL mid-page dump)', () => {
+    const html =
+      '<table><thead><tr><th>S/N</th><th>Issue</th><th>RECORD</th></tr></thead><tbody>' +
+      '<tr><td>7</td><td>Payment</td><td>Made.</td></tr></tbody></table>\n' +
+      '| |Work schedules|It was confirmed.|9|Contractor Inputs|Avoid idle.|10|Scope of the Work|Confirmed.|'
+    const sanitized = sanitizeDocumentPreviewHtml(html)
+    expect(sanitized).toContain('Work schedules')
+    expect(sanitized).toContain('>9</td>')
+    expect(sanitized).toContain('>10</td>')
+    expect(sanitized).toContain('Contractor Inputs')
+    expect(sanitized).not.toContain('|9|')
+  })
+})
+
+describe('mergeTrailingPipeRowsIntoHtmlTables', () => {
+  it('appends continuation pipe rows after a closed HTML table', () => {
+    const html =
+      '<table><tr><th>S/N</th><th>Issue</th><th>Note</th></tr><tr><td>5</td><td>A</td><td>B</td></tr></table>\n|8|C|D|\n|9|E|F|'
+    const merged = mergeTrailingPipeRowsIntoHtmlTables(html)
+    expect(merged).toContain('<td>8</td>')
+    expect(merged).toContain('<td>C</td>')
+    expect(merged).toContain('<td>9</td>')
+    expect(merged).not.toContain('|8|')
+  })
+
+  it('chunks jammed multi-row pipe soup by column count', () => {
+    expect(chunkPipeCellsIntoRows(['', 'A', 'B', '9', 'C', 'D', '10', 'E', 'F'], 3)).toEqual([
+      ['', 'A', 'B'],
+      ['9', 'C', 'D'],
+      ['10', 'E', 'F'],
+    ])
+  })
+})
+
+describe('markSerialNumberTableColumns', () => {
+  it('marks S/N, SIN, Item (numeric body), and 序号 headers', () => {
+    expect(markSerialNumberTableColumns('<table><tr><th>S/N</th><th>Issue</th></tr></table>')).toContain(
+      'tm-translation-doc-table--sn-first',
+    )
+    expect(
+      markSerialNumberTableColumns(
+        '<table><tr><th>SIN</th><th>Issue</th></tr><tr><td>1</td><td>A</td></tr></table>',
+      ),
+    ).toContain('tm-translation-doc-table--sn-first')
+    expect(
+      markSerialNumberTableColumns(
+        '<table><tr><th>Item</th><th>Issue</th></tr><tr><td>1</td><td>A</td></tr><tr><td>2</td><td>B</td></tr></table>',
+      ),
+    ).toContain('tm-translation-doc-table--sn-first')
+    expect(markSerialNumberTableColumns('<table><tr><th>序号</th><th>事项</th></tr></table>')).toContain(
+      'tm-translation-doc-table--sn-first',
+    )
+    // Contract Data "Item" with long labels must stay wide.
+    expect(
+      markSerialNumberTableColumns(
+        "<table><tr><th>Item</th><th>Entry</th></tr><tr><td>Employer's name</td><td>Tembo</td></tr></table>",
+      ),
+    ).not.toContain('tm-translation-doc-table--sn-first')
+  })
+})
+
+describe('repairDocumentPreviewTables', () => {
+  it('promotes orphan pipe-only continuation pages into a table', () => {
+    const text = ['|8|Work schedules|Confirmed.|', '|9|Contractor Inputs|Avoid idle.|'].join('\n')
+    const repaired = repairDocumentPreviewTables(text)
+    expect(repaired).toContain('<table')
+    expect(repaired).toContain('<td>8</td>')
+    expect(repaired).toContain('Work schedules')
+    expect(repaired).not.toContain('|8|')
+  })
+
+  it('promotes pipe rows wrapped in paragraph tags', () => {
+    const text = [
+      '<p>|8|Cable Lot|Confirmed.|</p>',
+      '<p>|9|Pipe Lot|Pending.|</p>',
+    ].join('\n')
+    const repaired = promoteOrphanPipeRowsToHtmlTables(text)
+    expect(repaired).toContain('<table')
+    expect(repaired).toContain('<td>8</td>')
+    expect(repaired).toContain('Cable Lot')
+  })
+
+  it('does not treat empty-S/N data rows as the table header', () => {
+    const text = ['||Cable Lot|Confirmed.|', '|9|Pipe Lot|Pending.|'].join('\n')
+    const repaired = promoteOrphanPipeRowsToHtmlTables(text)
+    expect(repaired).toContain('<th>S/N</th>')
+    expect(repaired).toContain('<td>Cable Lot</td>')
+    expect(repaired).not.toMatch(/<th>Cable Lot<\/th>/)
+  })
+
+  it('promotes jammed one-line orphan continuation pipes', () => {
+    const text =
+      '|8|Work schedules|Confirmed.|9|Contractor Inputs|Avoid idle.|10|Scope of the Work|Confirmed.|'
+    const repaired = promoteOrphanPipeRowsToHtmlTables(text)
+    expect(repaired).toContain('<table')
+    expect(repaired).toContain('<td>8</td>')
+    expect(repaired).toContain('<td>9</td>')
+    expect(repaired).toContain('<td>10</td>')
+  })
+
+  it('keeps consistent short-cell schedule pipes as data tables', () => {
+    const table = [
+      '|1|1.1.1|Payment Terms|Yes|',
+      '|2|1.1.2|Tax Exemption|Yes|',
+      '|3|1.1.3|Work Schedule|No|',
+    ].join('\n')
+    expect(isLayoutGfmTable(table)).toBe(false)
+    expect(repairDocumentPreviewTables(table)).toContain('<table')
+  })
+
+  it('keeps dense 6-col HTML schedules rich when cells are filled', () => {
+    const html = [
+      '<table><tr><th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th></tr>',
+      '<tr><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td></tr>',
+      '<tr><td>7</td><td>8</td><td>9</td><td>10</td><td>11</td><td>12</td></tr>',
+      '</table>',
+    ].join('')
+    expect(isLayoutHtmlTable(html)).toBe(false)
   })
 })

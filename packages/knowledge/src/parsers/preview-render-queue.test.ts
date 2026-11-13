@@ -22,7 +22,7 @@ describe('preview render queue', () => {
 
     const visible = queue.enqueue(async () => {
       order.push('visible')
-    }, previewPriorityValue('visible'))
+    }, previewPriorityValue('visible', 720))
 
     const prefetch = queue.enqueue(async () => {
       order.push('prefetch')
@@ -31,6 +31,32 @@ describe('preview render queue', () => {
     releaseFirst()
     await Promise.all([first, visible, prefetch])
     expect(order).toEqual(['running', 'visible', 'prefetch'])
+  })
+
+  it('runs readable fast paint before a sharp upgrade', async () => {
+    expect(previewPriorityValue('visible', 720)).toBeGreaterThan(previewPriorityValue('visible', 1440))
+    const queue = createPreviewRenderQueue()
+    const order: string[] = []
+    let releaseFirst!: () => void
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+
+    const blocker = queue.enqueue(async () => {
+      await firstGate
+    }, previewPriorityValue('prefetch'))
+
+    const sharp = queue.enqueue(async () => {
+      order.push('sharp')
+    }, previewPriorityValue('visible', 1440))
+
+    const fast = queue.enqueue(async () => {
+      order.push('fast')
+    }, previewPriorityValue('visible', 720))
+
+    releaseFirst()
+    await Promise.all([blocker, sharp, fast])
+    expect(order).toEqual(['fast', 'sharp'])
   })
 
   it('runs a lower-priority metadata task after a visible preview', async () => {
@@ -131,6 +157,41 @@ describe('preview render queue', () => {
     await expect(stale).rejects.toThrow(PREVIEW_RENDER_DROPPED)
     await expect(current).resolves.toBe('current')
     await expect(neighbor).resolves.toBe('neighbor')
+    await blocker
+  })
+
+  it('dropExcept removes other pages while keeping the landed page', async () => {
+    const queue = createPreviewRenderQueue()
+    let releaseFirst!: () => void
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+
+    const blocker = queue.enqueue(async () => {
+      await firstGate
+    }, {
+      priority: previewPriorityValue('visible', 720),
+      key: 'p1',
+      group: 'doc',
+      page: 1,
+    })
+    const keep = queue.enqueue(async () => 'keep', {
+      priority: previewPriorityValue('prefetch'),
+      key: 'p9',
+      group: 'doc',
+      page: 9,
+    })
+    const drop = queue.enqueue(async () => 'drop', {
+      priority: previewPriorityValue('prefetch'),
+      key: 'p3',
+      group: 'doc',
+      page: 3,
+    })
+
+    queue.dropExcept('doc', 9, 0)
+    releaseFirst()
+    await expect(drop).rejects.toThrow(PREVIEW_RENDER_DROPPED)
+    await expect(keep).resolves.toBe('keep')
     await blocker
   })
 

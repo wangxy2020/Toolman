@@ -1,13 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
+  PDF_PREVIEW_ACTIVE_RADIUS,
+  PDF_PREVIEW_FAST_MAX_WIDTH,
+  PDF_PREVIEW_IMMEDIATE_MAX_WIDTH,
   PDF_PREVIEW_MAX_RENDER_WIDTH,
   PDF_PREVIEW_PREFETCH_AHEAD,
+  PDF_PREVIEW_PREFETCH_BEHIND,
   PDF_PREVIEW_WARM_RADIUS,
   resolvePdfPreviewActive,
   resolvePdfPreviewDirection,
   resolvePdfPreviewFetchPages,
   resolvePdfPreviewPriority,
   resolvePdfPreviewFastWidth,
+  resolvePdfPreviewImmediateWidth,
   resolvePdfPreviewRenderWidth,
   resolvePdfPreviewSharpWidth,
   resolveParseBodyAttachFlags,
@@ -15,7 +20,8 @@ import {
 } from './document-page-preview-policy'
 
 describe('document-page-preview-policy', () => {
-  it('loads the current page and window neighbors before the first JPEG is ready', () => {
+  it('activates current ±1 so page 2 can paint from cache while page 1 is focused', () => {
+    expect(PDF_PREVIEW_ACTIVE_RADIUS).toBe(1)
     expect(
       resolvePdfPreviewActive({
         pageNumber: 1,
@@ -35,6 +41,20 @@ describe('document-page-preview-policy', () => {
       }),
     ).toBe(true)
     expect(
+      resolvePdfPreviewActive({
+        pageNumber: 3,
+        currentPage: 1,
+        readyPage: null,
+        totalPages: 20,
+        direction: 1,
+      }),
+    ).toBe(false)
+  })
+
+  it('prefetches only one page ahead to keep scan rasters off the main-process queue', () => {
+    expect(PDF_PREVIEW_PREFETCH_AHEAD).toBe(1)
+    expect(PDF_PREVIEW_PREFETCH_BEHIND).toBe(0)
+    expect(
       resolvePdfPreviewFetchPages({
         currentPage: 4,
         totalPages: 20,
@@ -44,67 +64,10 @@ describe('document-page-preview-policy', () => {
     ).toEqual([
       { pageNumber: 4, priority: 'visible' },
       { pageNumber: 5, priority: 'prefetch' },
-      { pageNumber: 6, priority: 'prefetch' },
-      { pageNumber: 7, priority: 'prefetch' },
-      { pageNumber: 8, priority: 'prefetch' },
-      { pageNumber: 9, priority: 'prefetch' },
-      { pageNumber: 10, priority: 'prefetch' },
-      { pageNumber: 11, priority: 'prefetch' },
-      { pageNumber: 12, priority: 'prefetch' },
-      { pageNumber: 3, priority: 'prefetch' },
-      { pageNumber: 2, priority: 'prefetch' },
     ])
   })
 
-  it('paints the full mounted overscan window around the current page', () => {
-    expect(
-      resolvePdfPreviewActive({
-        pageNumber: 2,
-        currentPage: 1,
-        readyPage: 1,
-        totalPages: 20,
-        direction: 1,
-      }),
-    ).toBe(true)
-    expect(
-      resolvePdfPreviewActive({
-        pageNumber: 4,
-        currentPage: 1,
-        readyPage: 1,
-        totalPages: 20,
-        direction: 1,
-      }),
-    ).toBe(true)
-    expect(
-      resolvePdfPreviewActive({
-        pageNumber: 6,
-        currentPage: 7,
-        readyPage: 7,
-        totalPages: 20,
-        direction: 1,
-      }),
-    ).toBe(true)
-    expect(
-      resolvePdfPreviewActive({
-        pageNumber: 10,
-        currentPage: 7,
-        readyPage: 7,
-        totalPages: 20,
-        direction: 1,
-      }),
-    ).toBe(true)
-    expect(
-      resolvePdfPreviewActive({
-        pageNumber: 11,
-        currentPage: 7,
-        readyPage: 7,
-        totalPages: 20,
-        direction: 1,
-      }),
-    ).toBe(false)
-  })
-
-  it('uses the same lookahead on first open and while paging', () => {
+  it('keeps the same lookahead shape on first open and while paging', () => {
     expect(
       resolvePdfPreviewFetchPages({
         currentPage: 1,
@@ -112,7 +75,7 @@ describe('document-page-preview-policy', () => {
         readyPage: null,
         direction: 1,
       }).map((item) => item.pageNumber),
-    ).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9])
+    ).toEqual([1, 2])
     expect(
       resolvePdfPreviewFetchPages({
         currentPage: 10,
@@ -121,7 +84,7 @@ describe('document-page-preview-policy', () => {
         direction: 1,
         extent: 'far',
       }).map((item) => item.pageNumber),
-    ).toEqual([10, 11, 12, 13, 14, 15, 16, 17, 18, 9, 8])
+    ).toEqual([10, 11])
     expect(
       resolvePdfPreviewFetchPages({
         currentPage: 10,
@@ -130,29 +93,10 @@ describe('document-page-preview-policy', () => {
         direction: -1,
         extent: 'near',
       }).map((item) => item.pageNumber),
-    ).toEqual([10, 9, 8, 7, 6, 5, 4, 3, 2, 11, 12])
+    ).toEqual([10, 9])
   })
 
-  it('prefetches eight pages ahead on first open and while paging', () => {
-    expect(PDF_PREVIEW_PREFETCH_AHEAD).toBe(8)
-    const first = resolvePdfPreviewFetchPages({
-      currentPage: 1,
-      totalPages: 48,
-      readyPage: 1,
-      direction: 1,
-    }).map((item) => item.pageNumber)
-    const later = resolvePdfPreviewFetchPages({
-      currentPage: 8,
-      totalPages: 48,
-      readyPage: 8,
-      direction: 1,
-    }).map((item) => item.pageNumber)
-    expect(first).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9])
-    expect(later).toEqual([8, 9, 10, 11, 12, 13, 14, 15, 16, 7, 6])
-    expect(first.length).toBeLessThanOrEqual(later.length)
-  })
-
-  it('prefetches the previous page when scrolling up', () => {
+  it('activates the previous neighbor when scrolling up', () => {
     expect(resolvePdfPreviewDirection(8, 7)).toBe(-1)
     expect(
       resolvePdfPreviewActive({
@@ -170,13 +114,17 @@ describe('document-page-preview-policy', () => {
     expect(resolvePdfPreviewPriority(5, 4)).toBe('prefetch')
   })
 
-  it('caps preview raster size', () => {
+  it('uses immediate = readable ≥720 then sharp ≤1440', () => {
+    expect(PDF_PREVIEW_IMMEDIATE_MAX_WIDTH).toBe(720)
+    expect(PDF_PREVIEW_FAST_MAX_WIDTH).toBe(720)
+    expect(PDF_PREVIEW_MAX_RENDER_WIDTH).toBe(1440)
     expect(resolvePdfPreviewRenderWidth(0)).toBe(0)
-    expect(resolvePdfPreviewRenderWidth(800)).toBe(resolvePdfPreviewSharpWidth(800))
-    expect(resolvePdfPreviewRenderWidth(1400)).toBe(resolvePdfPreviewSharpWidth(1400))
-    expect(resolvePdfPreviewFastWidth(800)).toBe(800)
-    expect(resolvePdfPreviewFastWidth(1400)).toBe(1000)
-    expect(resolvePdfPreviewSharpWidth(800)).toBeGreaterThanOrEqual(800)
+    expect(resolvePdfPreviewImmediateWidth(800)).toBe(720)
+    expect(resolvePdfPreviewImmediateWidth(800)).toBe(resolvePdfPreviewFastWidth(800))
+    expect(resolvePdfPreviewFastWidth(800)).toBe(720)
+    expect(resolvePdfPreviewFastWidth(400)).toBe(400)
+    expect(resolvePdfPreviewSharpWidth(400)).toBeGreaterThan(resolvePdfPreviewFastWidth(400))
+    expect(resolvePdfPreviewSharpWidth(800)).toBeGreaterThan(resolvePdfPreviewFastWidth(800))
     expect(resolvePdfPreviewSharpWidth(800)).toBeLessThanOrEqual(PDF_PREVIEW_MAX_RENDER_WIDTH)
     expect(resolvePdfPreviewSharpWidth(3000)).toBe(PDF_PREVIEW_MAX_RENDER_WIDTH)
   })
@@ -191,7 +139,16 @@ describe('document-page-preview-policy', () => {
     expect(shouldAttachSavedSnapshotBody(false, false)).toBe(true)
   })
 
-  it('attaches plain bodies in the window and rich fit only near the current page', () => {
+  it('keeps the same final layout for every mounted PDF window row', () => {
+    expect(
+      resolveParseBodyAttachFlags({
+        isPdf: true,
+        pageNumber: 2,
+        currentPage: 2,
+        startPage: 1,
+        endPage: 5,
+      }),
+    ).toEqual({ attachPlain: true, attachRich: true })
     expect(
       resolveParseBodyAttachFlags({
         isPdf: true,
@@ -209,7 +166,7 @@ describe('document-page-preview-policy', () => {
         startPage: 1,
         endPage: 5,
       }),
-    ).toEqual({ attachPlain: true, attachRich: false })
+    ).toEqual({ attachPlain: true, attachRich: true })
     expect(
       resolveParseBodyAttachFlags({
         isPdf: true,

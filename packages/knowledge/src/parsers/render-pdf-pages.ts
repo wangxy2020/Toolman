@@ -2,7 +2,11 @@ import { readFileSync, statSync } from 'node:fs'
 import { coalesceInflight } from './inflight-coalesce.js'
 import { loadPdfjsDocument } from './pdfjs-options.js'
 import { previewJpegCache } from './preview-jpeg-cache.js'
-import { createPreviewRenderQueue, PDF_PREVIEW_RETAIN_PAGES, previewPriorityValue } from './preview-render-queue.js'
+import {
+  createPreviewRenderQueue,
+  PreviewRenderDroppedError,
+  previewPriorityValue,
+} from './preview-render-queue.js'
 import { whitenRenderedPageCanvas } from './pdf-left-margin-whiten.js'
 
 export interface RenderedPdfPage {
@@ -270,11 +274,75 @@ export function enqueuePdfDocumentTask<T>(task: () => Promise<T>, priority = 0):
   return previewRenderQueue.enqueue(task, priority)
 }
 
-const PDF_PREVIEW_MAX_RENDER_WIDTH = 2400
-const PDF_PREVIEW_JPEG_QUALITY = 96
+/** Match renderer caps — first paint ≥720, sharp up to 1440. */
+const PDF_PREVIEW_MAX_RENDER_WIDTH = 1440
+const PDF_PREVIEW_JPEG_QUALITY_FAST = 78
+const PDF_PREVIEW_JPEG_QUALITY_SHARP = 90
+
+type SoftCancelState = {
+  epoch: number
+  filePath: string
+  keepPage: number
+}
+
+let softCancelState: SoftCancelState = { epoch: 0, filePath: '', keepPage: 0 }
+let activePreviewRenderTask: {
+  cancel: () => void
+  filePath: string
+  page: number
+} | null = null
+
+function isRenderCancelledError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const name = String((error as { name?: string }).name ?? '')
+  const message = String((error as { message?: string }).message ?? '')
+  return (
+    name.includes('RenderingCancelled') ||
+    message.includes('Rendering cancelled') ||
+    message.includes('RenderingCancelled')
+  )
+}
+
+/**
+ * True when a soft-cancel happened after `epochAtStart` and this page is not the
+ * landed keep-page. Keep-page work (queued or in-flight) must survive so prefetch
+ * can be promoted without a full re-raster.
+ */
+function isSoftCancelled(filePath: string, page: number, epochAtStart: number): boolean {
+  if (epochAtStart === softCancelState.epoch) return false
+  if (softCancelState.filePath !== filePath) return false
+  return page !== softCancelState.keepPage
+}
+
+/**
+ * Soft-cancel: drop queued work for other pages and abort the in-flight pdf.js
+ * RenderTask when it is not the landed page. Keeps the worker + pdf.js document
+ * + JPEG cache alive.
+ */
+export function cancelPdfPreviewRenders(filePath: string, keepPage: number): void {
+  softCancelState = {
+    epoch: softCancelState.epoch + 1,
+    filePath,
+    keepPage: Math.max(1, Math.floor(keepPage) || 1),
+  }
+  previewRenderQueue.dropExcept(filePath, softCancelState.keepPage, 0)
+  const task = activePreviewRenderTask
+  if (!task) return
+  if (task.filePath === filePath && task.page === softCancelState.keepPage) return
+  activePreviewRenderTask = null
+  try {
+    task.cancel()
+  } catch {
+    // pdf.js cancel is best-effort across versions.
+  }
+}
 
 function previewTargetWidth(targetWidth: number): number {
-  return Math.max(200, Math.min(PDF_PREVIEW_MAX_RENDER_WIDTH, Math.round(targetWidth)))
+  return Math.max(160, Math.min(PDF_PREVIEW_MAX_RENDER_WIDTH, Math.round(targetWidth)))
+}
+
+function previewJpegQuality(width: number): number {
+  return width >= 900 ? PDF_PREVIEW_JPEG_QUALITY_SHARP : PDF_PREVIEW_JPEG_QUALITY_FAST
 }
 
 /** Render a single PDF page for side-by-side document translation preview. */
@@ -308,77 +376,125 @@ export async function renderPdfPagePreview(
 
   const cacheKey = previewJpegCache.key(filePath, mtimeMs, requestedPage, width)
   const isVisible = options?.priority !== 'prefetch'
+  // Retain only the landed page — skipped middle pages must not stay queued.
+  const retainAround = isVisible ? 0 : undefined
+  const epochAtEnqueue = softCancelState.epoch
 
   return previewRenderQueue.enqueue(
     async () => {
-    const queued = previewJpegCache.get(previewJpegCache.key(filePath, mtimeMs, requestedPage, width))
-    if (queued) {
-      return {
-        totalPages: queued.totalPages,
-        pageNumber: requestedPage,
-        png: queued.jpeg,
-        mimeType: queued.mimeType,
-        width: queued.width,
-        height: queued.height,
+      if (isSoftCancelled(filePath, requestedPage, epochAtEnqueue)) {
+        throw new PreviewRenderDroppedError()
       }
-    }
-
-    const document = await getCachedPdfDocument(filePath)
-    const totalPages = document.numPages
-    if (totalPages < 1) {
-      throw new Error('PDF has no pages')
-    }
-
-    const safePage = Math.max(1, Math.min(requestedPage, totalPages))
-    const safeCached = previewJpegCache.get(previewJpegCache.key(filePath, mtimeMs, safePage, width))
-    if (safeCached) {
-      return {
-        totalPages: safeCached.totalPages,
-        pageNumber: safePage,
-        png: safeCached.jpeg,
-        mimeType: safeCached.mimeType,
-        width: safeCached.width,
-        height: safeCached.height,
+      const queued = previewJpegCache.get(previewJpegCache.key(filePath, mtimeMs, requestedPage, width))
+      if (queued) {
+        return {
+          totalPages: queued.totalPages,
+          pageNumber: requestedPage,
+          png: queued.jpeg,
+          mimeType: queued.mimeType,
+          width: queued.width,
+          height: queued.height,
+        }
       }
-    }
 
-    const page = await document.getPage(safePage)
-    const baseViewport = page.getViewport({ scale: 1 })
-    const scale = Math.max(0.6, width / Math.max(1, baseViewport.width))
-    const viewport = page.getViewport({ scale })
-    const { createCanvas } = await import('@napi-rs/canvas')
-    const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height))
-    const context = canvas.getContext('2d')
-    context.imageSmoothingEnabled = false
-    await page.render({ canvasContext: context, viewport, canvas }).promise
+      const document = await getCachedPdfDocument(filePath)
+      if (isSoftCancelled(filePath, requestedPage, epochAtEnqueue)) {
+        throw new PreviewRenderDroppedError()
+      }
+      const totalPages = document.numPages
+      if (totalPages < 1) {
+        throw new Error('PDF has no pages')
+      }
 
-    const jpeg = canvas.toBuffer('image/jpeg', PDF_PREVIEW_JPEG_QUALITY)
-    const entry = {
-      jpeg,
-      mimeType: 'image/jpeg' as const,
-      width: canvas.width,
-      height: canvas.height,
-      totalPages,
-    }
-    previewJpegCache.set(previewJpegCache.key(filePath, mtimeMs, safePage, width), entry)
-    if (safePage !== requestedPage) {
-      previewJpegCache.set(previewJpegCache.key(filePath, mtimeMs, requestedPage, width), entry)
-    }
-    return {
-      totalPages,
-      pageNumber: safePage,
-      png: jpeg,
-      mimeType: 'image/jpeg' as const,
-      width: canvas.width,
-      height: canvas.height,
-    }
+      const safePage = Math.max(1, Math.min(requestedPage, totalPages))
+      if (isSoftCancelled(filePath, safePage, epochAtEnqueue)) {
+        throw new PreviewRenderDroppedError()
+      }
+      const safeCached = previewJpegCache.get(previewJpegCache.key(filePath, mtimeMs, safePage, width))
+      if (safeCached) {
+        return {
+          totalPages: safeCached.totalPages,
+          pageNumber: safePage,
+          png: safeCached.jpeg,
+          mimeType: safeCached.mimeType,
+          width: safeCached.width,
+          height: safeCached.height,
+        }
+      }
+
+      const page = await document.getPage(safePage)
+      try {
+        if (isSoftCancelled(filePath, safePage, epochAtEnqueue)) {
+          throw new PreviewRenderDroppedError()
+        }
+        const baseViewport = page.getViewport({ scale: 1 })
+        // Honor the requested width exactly — a 0.6 floor forced ~1800px paints on
+        // A4 scans even when the UI asked for a 720px preview (UI beachballs / queue stall).
+        const scale = Math.max(0.12, width / Math.max(1, baseViewport.width))
+        const viewport = page.getViewport({ scale })
+        const { createCanvas } = await import('@napi-rs/canvas')
+        const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height))
+        const context = canvas.getContext('2d')
+        context.imageSmoothingEnabled = true
+        const renderTask = page.render({ canvasContext: context, viewport, canvas })
+        const tracked = {
+          cancel: () => renderTask.cancel(),
+          filePath,
+          page: safePage,
+        }
+        activePreviewRenderTask = tracked
+        try {
+          await renderTask.promise
+        } catch (error) {
+          if (
+            isRenderCancelledError(error) ||
+            isSoftCancelled(filePath, safePage, epochAtEnqueue)
+          ) {
+            throw new PreviewRenderDroppedError()
+          }
+          throw error
+        } finally {
+          if (activePreviewRenderTask === tracked) activePreviewRenderTask = null
+        }
+        if (isSoftCancelled(filePath, safePage, epochAtEnqueue)) {
+          throw new PreviewRenderDroppedError()
+        }
+
+        const jpeg = canvas.toBuffer('image/jpeg', previewJpegQuality(width))
+        const entry = {
+          jpeg,
+          mimeType: 'image/jpeg' as const,
+          width: canvas.width,
+          height: canvas.height,
+          totalPages,
+        }
+        previewJpegCache.set(previewJpegCache.key(filePath, mtimeMs, safePage, width), entry)
+        if (safePage !== requestedPage) {
+          previewJpegCache.set(previewJpegCache.key(filePath, mtimeMs, requestedPage, width), entry)
+        }
+        return {
+          totalPages,
+          pageNumber: safePage,
+          png: jpeg,
+          mimeType: 'image/jpeg' as const,
+          width: canvas.width,
+          height: canvas.height,
+        }
+      } finally {
+        // Drop decoded page ops so scrolling a 50MB scan does not retain every page in RAM.
+        try {
+          page.cleanup()
+        } catch {
+          // pdf.js cleanup is best-effort across versions.
+        }
+      }
     },
     {
-      priority: previewPriorityValue(options?.priority),
+      priority: previewPriorityValue(options?.priority, width),
       key: cacheKey,
       group: filePath,
       page: requestedPage,
-      retainAround: isVisible ? PDF_PREVIEW_RETAIN_PAGES : undefined,
+      retainAround,
     },
   )
 }

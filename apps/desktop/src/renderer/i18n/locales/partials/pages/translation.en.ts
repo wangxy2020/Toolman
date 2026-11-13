@@ -77,6 +77,7 @@ export const translationPageEn = {
     pageHybridUnavailable:
       'This scan needs ODL Hybrid OCR. Enable it in document settings (Toolman starts the local service automatically), or disable it to use glm-ocr.',
     pageError: 'Failed to translate this page',
+    pageRetry: 'Retry',
     pageJumpLabel: 'Go to page',
     pageJumpEnterHint: 'Press Enter to jump',
     pageJumpGo: 'Go',

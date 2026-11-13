@@ -157,7 +157,18 @@ export function useDocumentPageSourcePrefetch({
         : ''
       if (fromParse) {
         setCachedSourceText(filePath, pageNumber, fromParse)
-        updatePage(pageNumber, { sourceText: fromParse, status: 'idle', error: undefined })
+        // Never clobber translating/done — only fill sourceText.
+        const busy =
+          existing?.status === 'translating' ||
+          existing?.status === 'loading-source' ||
+          existing?.status === 'done' ||
+          refs.translationArmedRef.current
+        updatePage(
+          pageNumber,
+          busy
+            ? { sourceText: fromParse, error: undefined }
+            : { sourceText: fromParse, status: 'idle', error: undefined },
+        )
         return fromParse
       }
 
@@ -171,18 +182,25 @@ export function useDocumentPageSourcePrefetch({
           })
           return ''
         }
-        updatePage(pageNumber, {
-          sourceText: cachedSource,
-          status: 'idle',
-          error: undefined,
-        })
+        const busy =
+          existing?.status === 'translating' ||
+          existing?.status === 'loading-source' ||
+          existing?.status === 'done' ||
+          refs.translationArmedRef.current
+        updatePage(
+          pageNumber,
+          busy
+            ? { sourceText: cachedSource, error: undefined }
+            : { sourceText: cachedSource, status: 'idle', error: undefined },
+        )
         return cachedSource
       }
 
       const inflight = refs.pageSourceLoadRef.current.get(pageNumber)
       if (inflight) {
         try {
-          await inflight
+          // Bound wait so translate cannot hang on a stuck ODL prefetch forever.
+          await withTimeout(inflight, 90_000, '预加载页面超时')
         } catch {
           // Batch parse failed; fall through to retry below.
         }
@@ -206,7 +224,11 @@ export function useDocumentPageSourcePrefetch({
 
       updatePage(pageNumber, { status: 'loading-source', error: undefined })
       try {
-        await fetchPageSourcesBatch(pageNumber, pageNumber, generation)
+        await withTimeout(
+          fetchPageSourcesBatch(pageNumber, pageNumber, generation),
+          90_000,
+          '加载页面原文超时',
+        )
         if (generation !== refs.generationRef.current) return ''
 
         const resolved = refs.pagesRef.current.find((page) => page.pageNumber === pageNumber)
@@ -218,9 +240,10 @@ export function useDocumentPageSourcePrefetch({
         if (text && !insufficient) {
           setCachedSourceText(filePath, pageNumber, text)
         }
+        const busy = refs.translationArmedRef.current
         updatePage(pageNumber, {
           sourceText: insufficient ? '' : text,
-          status: insufficient ? 'empty' : 'idle',
+          status: insufficient ? 'empty' : busy ? 'loading-source' : 'idle',
           error: !text ? 'empty' : insufficient ? NO_VALID_PAGE_TEXT : undefined,
         })
         scheduleSourcePrefetch(pageNumber, generation)

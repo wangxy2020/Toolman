@@ -37,11 +37,18 @@ function buildJavaExecEnv(): NodeJS.ProcessEnv {
   return env
 }
 
+const javaRuntimeCache = new Map<string, { at: number; status: JavaRuntimeStatus }>()
+const JAVA_RUNTIME_CACHE_MS = 10 * 60 * 1000
+
 export async function detectJavaRuntime(
   javaCommand = 'java',
   timeoutMs = 5_000,
 ): Promise<JavaRuntimeStatus> {
   sanitizeProcessJavaToolOptions()
+  const cached = javaRuntimeCache.get(javaCommand)
+  if (cached && Date.now() - cached.at < JAVA_RUNTIME_CACHE_MS) {
+    return cached.status
+  }
   try {
     const { stdout, stderr } = await execFileAsync(javaCommand, ['-version'], {
       timeout: timeoutMs,
@@ -50,16 +57,28 @@ export async function detectJavaRuntime(
     const combined = `${stdout}\n${stderr}`
     const match = combined.match(JAVA_VERSION_RE)
     if (!match?.[1]) {
-      return { available: false, error: '无法解析 Java 版本' }
+      const status = { available: false as const, error: '无法解析 Java 版本' }
+      javaRuntimeCache.set(javaCommand, { at: Date.now(), status })
+      return status
     }
-    return { available: true, version: match[1] }
+    const status = { available: true as const, version: match[1] }
+    javaRuntimeCache.set(javaCommand, { at: Date.now(), status })
+    return status
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Java 不可用'
-    if (message.includes('ENOENT')) {
-      return { available: false, error: '未找到 java 命令，请安装 Java 11+' }
-    }
-    return { available: false, error: message }
+    const status =
+      message.includes('ENOENT')
+        ? { available: false as const, error: '未找到 java 命令，请安装 Java 11+' }
+        : { available: false as const, error: message }
+    // Cache failures briefly so a missing java does not spam -version on every page batch.
+    javaRuntimeCache.set(javaCommand, { at: Date.now(), status })
+    return status
   }
+}
+
+/** Test helper — drop cached java -version probes. */
+export function clearJavaRuntimeCache(): void {
+  javaRuntimeCache.clear()
 }
 
 export function resolveJavaHeapOptions(maxHeapMb = 768): NodeJS.ProcessEnv {
