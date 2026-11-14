@@ -15,13 +15,6 @@
   min-width: 0;
 }
 
-.tm-alib-sidebar-empty {
-  padding: 8px 12px 12px 28px;
-  font-size: 12px;
-  opacity: 0.65;
-  line-height: 1.4;
-}
-
 .tm-agent-modal--create .tm-agent-setting-block > .tm-kb-kind-radio-group + .tm-alib-textbook-path {
   margin-top: 8px;
 }

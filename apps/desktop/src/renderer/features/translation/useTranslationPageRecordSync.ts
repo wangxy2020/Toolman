@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import type { TranslationLanguage } from '@toolman/shared'
 import { normalizeTranslationLanguages } from '../chat/translation-utils'
 import { countRestorableSnapshots } from './document-page-snapshots'
@@ -110,10 +110,16 @@ export function useTranslationPageRecordSync(options: {
     translationLanguages,
   ])
 
+  const announcedRestoreForDocRef = useRef<string | null>(null)
   useEffect(() => {
-    if (!isDocuments || !activeDocumentId) return
+    if (!isDocuments || !activeDocumentId) {
+      announcedRestoreForDocRef.current = null
+      return
+    }
+    if (announcedRestoreForDocRef.current === activeDocumentId) return
     const restoredPages = countRestorableSnapshots(pageSnapshots)
     if (restoredPages > 0) {
+      announcedRestoreForDocRef.current = activeDocumentId
       showStatus(
         t('translationPage.documents.restoredFromSave', { count: String(restoredPages) }),
       )

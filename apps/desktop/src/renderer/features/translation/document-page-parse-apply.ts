@@ -2,22 +2,12 @@ import { useCallback } from 'react'
 import type { TranslationLanguage } from '@toolman/shared'
 import { cachePageState } from './document-page-cache'
 import { resolvedPageCount, resolveTranslationSourceText } from './document-page-parse-helpers'
-import { reflowTranslationDisplayLines } from './translation-paragraphs'
+import { resolveParseDisplayContent } from './document-page-parse-display'
 import type { DocumentPageRefs, DocumentPageSetters, DocumentPageState } from './document-page-types'
 import {
-  flattenLayoutHtmlTable,
-  gfmTablesToHtml,
   hasDisplayableParsePreviewContent,
-  hasGfmTableMarkup,
-  hasHtmlMarkup,
   hasUsableParsePreviewContent,
-  htmlPreviewToVisibleText,
-  isLayoutGfmTable,
-  isLayoutHtmlTable,
-  normalizeGfmTableMarkup,
-  repairDocumentPreviewTables,
   sanitizeParsePreviewContent,
-  stripBrokenGfmTableNoise,
 } from './translation-page-source-quality'
 
 interface ParseApplyDeps {
@@ -60,45 +50,12 @@ export function useDocumentPageParseApply({
           ? hasDisplayableParsePreviewContent(plain, markdown)
           : hasUsableParsePreviewContent(plain, markdown)
         const sourceForTranslate = resolveTranslationSourceText(rawPlain, rawMarkdown)
-        // Cover/layout grids → prose; real HTML/GFM data tables stay markup for rich render.
-        let displayPlain = plain.trim() || rawPlain
-        let displayMarkdown = markdown.trim() || rawMarkdown
-        const layoutSource = rawMarkdown.trim() || rawPlain.trim() || displayMarkdown || displayPlain
-        // Final dual-pane layout: real data tables stay as HTML; layout grids → prose.
-        // Apply stays chunked + scroll-gated so this work does not beachball flings.
-        if (hasHtmlMarkup(layoutSource) && /<table\b/i.test(layoutSource)) {
-          if (isLayoutHtmlTable(layoutSource)) {
-            displayPlain = reflowTranslationDisplayLines(flattenLayoutHtmlTable(layoutSource))
-            displayMarkdown = displayPlain
-          } else {
-            // Merge trailing `|8|…|` pipe dumps into the HTML table before display/cache.
-            displayMarkdown = repairDocumentPreviewTables(layoutSource)
-            displayPlain = htmlPreviewToVisibleText(displayMarkdown)
-          }
-        } else if (hasGfmTableMarkup(layoutSource) && !isLayoutGfmTable(layoutSource)) {
-          const htmlTable = repairDocumentPreviewTables(
-            gfmTablesToHtml(normalizeGfmTableMarkup(layoutSource)),
-          )
-          displayMarkdown = htmlTable
-          displayPlain = htmlPreviewToVisibleText(htmlTable)
-        } else if (/^\s*\|.+\|/m.test(layoutSource) || (/\|/.test(layoutSource) && !hasGfmTableMarkup(layoutSource))) {
-          // Try repair/promote first — isLayoutGfmTable false-positives used to
-          // strip real continuation schedules (page 9+) into prose.
-          const htmlTable = repairDocumentPreviewTables(layoutSource)
-          if (/<table\b/i.test(htmlTable) && !isLayoutHtmlTable(htmlTable)) {
-            displayMarkdown = htmlTable
-            displayPlain = htmlPreviewToVisibleText(htmlTable)
-          } else if (isLayoutGfmTable(layoutSource)) {
-            displayPlain = reflowTranslationDisplayLines(stripBrokenGfmTableNoise(layoutSource))
-            displayMarkdown = displayPlain
-          } else {
-            displayPlain = reflowTranslationDisplayLines(stripBrokenGfmTableNoise(layoutSource))
-            displayMarkdown = displayPlain
-          }
-        } else if (!hasHtmlMarkup(layoutSource)) {
-          displayPlain = reflowTranslationDisplayLines(displayPlain)
-          displayMarkdown = displayPlain
-        }
+        const { displayPlain, displayMarkdown } = resolveParseDisplayContent(
+          plain,
+          markdown,
+          rawPlain,
+          rawMarkdown,
+        )
         if (hasContent) {
           patches.set(pageNumber, {
             status: 'parsed',
@@ -120,7 +77,13 @@ export function useDocumentPageParseApply({
 
       setters.setPages((prev) => {
         const pageLimit = resolvedPageCount(refs.totalPagesRef.current, prev.length)
-        let next = prev.map((page) => {
+        // Prefer refs when commitTotalPages just expanded slots — a stale `prev`
+        // of only the probe pages would otherwise shrink the list back and make
+        // progress jump to 100% (2/2) while later batches are still running.
+        const seed =
+          refs.pagesRef.current.length >= prev.length ? refs.pagesRef.current : prev
+        const fillStatus = emptyAsParsing ? ('parsing' as const) : ('idle' as const)
+        let next = seed.map((page) => {
           const patch = patches.get(page.pageNumber)
           if (!patch) return page
           // Never clobber an in-flight / finished translation with a late parse write.
@@ -137,6 +100,18 @@ export function useDocumentPageParseApply({
           }
           return { ...page, ...patch }
         })
+        if (pageLimit > next.length) {
+          for (let pageNumber = next.length + 1; pageNumber <= pageLimit; pageNumber += 1) {
+            const patch = patches.get(pageNumber)
+            next.push({
+              pageNumber,
+              sourceText: '',
+              translatedText: '',
+              status: fillStatus,
+              ...patch,
+            })
+          }
+        }
         for (const pageNumber of pageNumbers) {
           if (next.some((page) => page.pageNumber === pageNumber)) continue
           if (pageLimit > 0 && pageNumber > pageLimit) continue
@@ -148,7 +123,7 @@ export function useDocumentPageParseApply({
               pageNumber,
               sourceText: '',
               translatedText: '',
-              status: 'idle' as const,
+              status: fillStatus,
               ...patch,
             },
           ].sort((left, right) => left.pageNumber - right.pageNumber)

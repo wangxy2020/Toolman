@@ -170,6 +170,9 @@ export function useTranslationPageDocumentActions(options: {
       documentWorkspaceRef.current?.stopParse()
       return
     }
+    // Always disarm translate when switching to parse — even after translate
+    // finished (busy=false) translationArmed may still be true.
+    documentWorkspaceRef.current?.stopTranslation()
     const started = documentWorkspaceRef.current?.startParse()
     if (started === false) {
       setError(t('translationPage.documents.parseNotReady'))
@@ -187,7 +190,8 @@ export function useTranslationPageDocumentActions(options: {
       documentWorkspaceRef.current?.stopTranslation()
       return
     }
-    // Always cancel in-flight parse before arming translate (generation handoff).
+    // Stop parse only when it is still running. Calling stopParse after parse
+    // already finished used to bump generation and abort the new translate.
     if (documentParsing) {
       documentWorkspaceRef.current?.stopParse()
     }

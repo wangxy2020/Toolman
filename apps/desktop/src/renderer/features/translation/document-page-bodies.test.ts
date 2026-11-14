@@ -68,7 +68,24 @@ describe('document-page-bodies', () => {
     expect(lookup.get(1)?.plain).toBe('# Live')
   })
 
-  it('attaches a body only when the row is allowed to show text', () => {
+  it('does not resurrect snapshot bodies onto idle shells after 清空', () => {
+    const lookup = createDocumentPageBodyLookup(
+      [
+        {
+          pageNumber: 1,
+          sourceText: 'src',
+          translatedText: 'Claim Item flattened prose',
+          parsedMarkdown: 'Claim Item flattened prose',
+          status: 'parsed',
+        },
+      ],
+      [{ pageNumber: 1, sourceText: '', translatedText: '', parsedMarkdown: '', status: 'idle' }],
+    )
+
+    expect(lookup.get(1)).toBeUndefined()
+  })
+
+  it('keeps live text when attach is off and fills lightweight shells from the body', () => {
     const lightweight: DocumentPageState = {
       pageNumber: 1,
       sourceText: '',
@@ -91,10 +108,42 @@ describe('document-page-bodies', () => {
         body,
         false,
       ).translatedText,
-    ).toBe('')
+    ).toBe('# Live')
   })
 
-  it('keeps the translation when a leftover parse body is HTML or markdown', () => {
+  it('fills empty translating shells from the snapshot body but not done shells', () => {
+    const body = snapshotToPageBody({
+      pageNumber: 1,
+      sourceText: 'src',
+      translatedText: '已翻译',
+      parsedMarkdown: '<p>parsed</p>',
+      status: 'parsed',
+    })
+    const translating = resolvePageForDisplay(
+      { pageNumber: 1, sourceText: '', translatedText: '', status: 'translating' },
+      body,
+      true,
+    )
+    expect(translating.translatedText.length).toBeGreaterThan(0)
+    expect(translating.status).toBe('translating')
+
+    const doneEmpty = resolvePageForDisplay(
+      { pageNumber: 1, sourceText: '', translatedText: '', status: 'done' },
+      body,
+      true,
+    )
+    expect(doneEmpty.translatedText).toBe('')
+
+    const doneChinese = resolvePageForDisplay(
+      { pageNumber: 1, sourceText: '', translatedText: '中文译文', parsedMarkdown: '<p>parsed</p>', status: 'done' },
+      body,
+      true,
+    )
+    expect(doneChinese.translatedText).toBe('中文译文')
+    expect(doneChinese.parsedMarkdown).toBe('<p>parsed</p>')
+  })
+
+  it('keeps both translation and parse markdown so modes can switch', () => {
     const translated: DocumentPageState = {
       pageNumber: 1,
       sourceText: 'Dear Sir',
@@ -105,7 +154,7 @@ describe('document-page-bodies', () => {
     const body = toDocumentPageBody(translated.translatedText, translated.parsedMarkdown)
     const display = resolvePageForDisplay(translated, body, true)
     expect(display.translatedText).toBe(translated.translatedText)
-    expect(display.parsedMarkdown).toBeUndefined()
+    expect(display.parsedMarkdown).toBe('<p>Dear Sir</p>')
   })
 
   it('does not wipe live text with an empty HTML body while translating', () => {

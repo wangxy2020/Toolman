@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  flattenLayoutHtmlTable,
   gfmTablesToHtml,
   hasGfmTableMarkup,
   hasVisibleParsePreviewBody,
@@ -118,6 +119,43 @@ describe('isRichMarkdownPreview', () => {
     expect(plain).toContain('SECTION')
     expect(plain).toContain('CONTRACT AGREEMENT')
     expect(plain).not.toContain('<table')
+  })
+
+  it('keeps prose above a data table on the rich parse path', () => {
+    const prose =
+      '<p>Claim for Vehicle Detention, Empty Trailer Movements and Related Additional Costs.</p>' +
+      '<p>The Contractor hereby submits the following particulars:</p>'
+    const table = [
+      '<table><tr><th>Item</th><th>Description</th><th>Amount (USD)</th><th>Remark</th></tr>',
+      '<tr><td>1</td><td>Detention at Bukoba</td><td>12,500.00</td><td>14 days</td></tr>',
+      '<tr><td>2</td><td>Empty trailer return</td><td>3,200.00</td><td>Same route</td></tr>',
+      '<tr><td>3</td><td>Additional handling</td><td>1,800.00</td><td></td></tr>',
+      '</table>',
+    ].join('')
+    const html = `${prose}${table}`
+    expect(isLayoutHtmlTable(html)).toBe(false)
+    expect(usesRichDocumentPagePreview(html)).toBe(true)
+    const plain = htmlPreviewToVisibleText(html)
+    expect(plain).toContain('Vehicle Detention')
+    expect(plain).toContain('Detention at Bukoba')
+    expect(plain).toContain('Empty trailer return')
+  })
+
+  it('preserves prose outside layout tables when flattening', () => {
+    const html = [
+      '<p>Introduction paragraph before the grid.</p>',
+      '<table><tr>',
+      '<td>SECTION</td><td></td><td></td><td></td><td></td><td></td>',
+      '</tr><tr>',
+      '<td>1.0</td><td></td><td>CONTRACT</td><td></td><td>AGREEMENT</td><td></td>',
+      '</tr></table>',
+      '<p>Footer note after the grid.</p>',
+    ].join('')
+    const plain = flattenLayoutHtmlTable(html)
+    expect(plain).toContain('Introduction paragraph')
+    expect(plain).toContain('SECTION')
+    expect(plain).toContain('CONTRACT')
+    expect(plain).toContain('Footer note')
   })
 
   it('keeps real 3–4 column data tables on the rich path', () => {
@@ -338,6 +376,34 @@ describe('repairDocumentPreviewTables', () => {
     ].join('\n')
     expect(isLayoutGfmTable(table)).toBe(false)
     expect(repairDocumentPreviewTables(table)).toContain('<table')
+  })
+
+  it('does not wrap letter prose with incidental pipes into a table', () => {
+    const letter = [
+      'Dear Sirs,',
+      'We refer to Clause 8.4 | Extension of Time and the events below.',
+      '1. Background',
+      'The Contractor mobilized to Bukoba and waited for access.',
+      '2. Request',
+      'Accordingly we request approval of the claim amount.',
+    ].join('\n')
+    expect(promoteOrphanPipeRowsToHtmlTables(letter)).not.toContain('<table')
+    expect(repairDocumentPreviewTables(letter)).not.toContain('<table')
+  })
+
+  it('keeps pipe-wrapped letter paragraphs out of a claim GFM table body', () => {
+    const raw = [
+      '|Claim Item|Original Invoice Amount (TZS)|Basis of Claim|Amount Claimed (TZS)|',
+      '|---|---|---|---|',
+      '|In our letter No. 2026045 dated 17 July 2026, we requested TANESCO to complete payment.|',
+      '|Vehicle Standby Charges|33,800,000.00|Daily rate for 7 days|21,509,090.91|',
+      '|Total Claim Excluding VAT| | |122,259,090.91|',
+    ].join('\n')
+    const html = gfmTablesToHtml(raw)
+    expect(html).toContain('<table')
+    expect(html).toContain('In our letter No. 2026045')
+    expect(html).not.toMatch(/<td[^>]*>[\s\S]*In our letter/i)
+    expect(html).toContain('<td>Vehicle Standby Charges</td>')
   })
 
   it('keeps dense 6-col HTML schedules rich when cells are filled', () => {

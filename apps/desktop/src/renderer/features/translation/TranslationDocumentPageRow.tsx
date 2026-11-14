@@ -80,10 +80,18 @@ export const TranslationDocumentPageRow = memo(function TranslationDocumentPageR
     [attachBody, body, page],
   )
 
-  // Lock the first non-empty final body for this mounted row. Updating on every
-  // settle / parse chunk made tables and prose reshuffle while browsing.
+  // Parse mode locks a stable preview so progressive apply does not reshuffle
+  // while scrolling. Translate mode always follows live page state so Chinese
+  // (and errors) are not stuck behind a stale parse lock.
   const lockedPageRef = useRef<DocumentPageState | null>(null)
   const lockedSignatureRef = useRef('')
+  const modeRef = useRef<'parse' | 'translate' | 'idle'>('idle')
+  const mode = translationArmed ? 'translate' : parseArmed ? 'parse' : 'idle'
+  if (modeRef.current !== mode) {
+    modeRef.current = mode
+    lockedPageRef.current = null
+    lockedSignatureRef.current = ''
+  }
   const nextSignature = [
     displayPage.status,
     displayPage.translatedText.length,
@@ -93,27 +101,71 @@ export const TranslationDocumentPageRow = memo(function TranslationDocumentPageR
   ].join('|')
   const lockedHasTable = /<table\b/i.test(lockedPageRef.current?.parsedMarkdown ?? '')
   const nextHasTable = /<table\b/i.test(displayPage.parsedMarkdown ?? '')
-  if (!lockedPageRef.current && pageHasDisplayBody(displayPage)) {
+  const lockedBodyLen =
+    (lockedPageRef.current?.translatedText.trim().length ?? 0) +
+    (lockedPageRef.current?.parsedMarkdown?.trim().length ?? 0)
+  const nextBodyLen =
+    displayPage.translatedText.trim().length + (displayPage.parsedMarkdown?.trim().length ?? 0)
+
+  if (mode === 'translate') {
+    if (displayPage.status === 'done' && displayPage.translatedText.trim()) {
+      lockedPageRef.current = { ...displayPage, parsedMarkdown: undefined }
+      lockedSignatureRef.current = nextSignature
+    } else if (
+      !lockedPageRef.current &&
+      pageHasDisplayBody(displayPage) &&
+      (displayPage.status === 'translating' ||
+        displayPage.status === 'loading-source' ||
+        displayPage.status === 'parsed')
+    ) {
+      lockedPageRef.current = displayPage
+      lockedSignatureRef.current = nextSignature
+    }
+  } else if (mode === 'parse' && pageHasDisplayBody(displayPage)) {
+    // Parse mode must keep parsedMarkdown — never strip it for done pages.
+    lockedPageRef.current = displayPage
+    lockedSignatureRef.current = nextSignature
+  } else if (!lockedPageRef.current && pageHasDisplayBody(displayPage)) {
     lockedPageRef.current = displayPage
     lockedSignatureRef.current = nextSignature
   } else if (
     lockedPageRef.current &&
-    scrollSettled &&
     pageHasDisplayBody(displayPage) &&
     nextSignature !== lockedSignatureRef.current &&
-    // Upgrade when translate completes, a table appears, or full-doc replaces the
-    // progressive probe draft (parsed content change before translation).
-    ((displayPage.status === 'done' && lockedPageRef.current.status !== 'done') ||
-      (nextHasTable && !lockedHasTable) ||
-      (displayPage.status === 'parsed' &&
-        lockedPageRef.current.status !== 'done' &&
-        lockedPageRef.current.status !== 'translating' &&
-        lockedPageRef.current.status !== 'loading-source'))
+    ((nextHasTable && !lockedHasTable && scrollSettled) ||
+      (scrollSettled &&
+        displayPage.status === 'parsed' &&
+        nextBodyLen >= lockedBodyLen &&
+        lockedPageRef.current.status !== 'done'))
   ) {
     lockedPageRef.current = displayPage
     lockedSignatureRef.current = nextSignature
   }
-  const cardPage = lockedPageRef.current ?? displayPage
+
+  const locked = lockedPageRef.current
+  // Translate mode always uses live state (Chinese / errors). Parse mode may
+  // keep a locked preview so progressive apply does not reshuffle mid-scroll.
+  const cardPage =
+    mode === 'translate'
+      ? displayPage.status === 'translating' || displayPage.status === 'loading-source'
+        ? pageHasDisplayBody(displayPage)
+          ? displayPage
+          : locked
+            ? {
+                ...displayPage,
+                translatedText: displayPage.translatedText.trim()
+                  ? displayPage.translatedText
+                  : locked.translatedText,
+                parsedMarkdown:
+                  displayPage.parsedMarkdown?.trim() || locked.parsedMarkdown,
+              }
+            : displayPage
+        : displayPage
+      : mode === 'parse'
+        ? (locked ?? displayPage)
+        : displayPage.status === 'parsed' || displayPage.status === 'parsing'
+          ? (locked ?? displayPage)
+          : displayPage
 
   useLayoutEffect(() => {
     const el = rowRef.current
@@ -192,6 +244,7 @@ export const TranslationDocumentPageRow = memo(function TranslationDocumentPageR
             totalPages={totalPages}
             hasModel={hasModel}
             parseArmed={parseArmed}
+            translationArmed={translationArmed}
             heavyContent={showHeavyContent}
             // One-shot fit on the focused settled page only. Neighbors keep
             // clip + savedFit so scrolling does not rewrite every row's type.

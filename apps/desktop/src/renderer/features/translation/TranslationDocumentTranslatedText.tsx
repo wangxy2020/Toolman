@@ -5,18 +5,27 @@ import {
   isTotalDisplayRow,
 } from './translation-display-blocks'
 import { TranslationDocumentMarkdown } from './TranslationDocumentMarkdown'
-import { hasGfmTableMarkup, hasHtmlMarkup } from './translation-page-source-quality'
+import { hasHtmlMarkup } from './translation-page-source-quality'
 
 interface Props {
   text: string
 }
 
+/**
+ * Dual-pane body renderer shared by parse preview and Chinese translate.
+ * Prefer heading / paragraph / table blocks (same as translate). Only use the
+ * HTML markdown path when the page already has a real <table>.
+ */
 export const TranslationDocumentTranslatedText = memo(function TranslationDocumentTranslatedText({
   text,
 }: Props) {
-  // Preserve real HTML/GFM tables from structure-aware translate instead of
-  // flattening them through the prose heuristic reconstructor.
-  if (hasHtmlMarkup(text) || hasGfmTableMarkup(text) || /^\s*\|.+\|/m.test(text)) {
+  // Structure-aware HTML tables (ODL or prior HTML cache) keep the markdown path.
+  // Pipe / GFM / plain prose must NOT go through GFM→HTML — that mixed letter
+  // paragraphs into table cells. Translate already layouts correctly via blocks.
+  if (hasHtmlMarkup(text) && /<table\b/i.test(text)) {
+    return <TranslationDocumentMarkdown text={text} />
+  }
+  if (hasHtmlMarkup(text)) {
     return <TranslationDocumentMarkdown text={text} />
   }
 
@@ -67,29 +76,23 @@ export const TranslationDocumentTranslatedText = memo(function TranslationDocume
           )
         }
         if (block.type === 'heading') {
+          const heading = block.text.replace(/^#+\s+/, '').trim()
           return (
-            <h3
-              key={index}
-              className={
-                block.text.length <= 48
-                  ? 'tm-translation-doc-page-heading tm-translation-doc-page-heading--center'
-                  : 'tm-translation-doc-page-heading'
-              }
-            >
-              {block.text}
+            <h3 key={index} className="tm-translation-doc-page-heading">
+              {heading}
             </h3>
           )
         }
         if (block.type === 'meta') {
           return (
             <p key={index} className="tm-translation-doc-page-meta">
-              {block.text}
+              {block.text.trim()}
             </p>
           )
         }
         return (
           <p key={index} className="tm-translation-doc-page-para">
-            {block.text}
+            {block.text.replace(/^#+\s+/, '').trim()}
           </p>
         )
       })}

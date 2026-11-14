@@ -97,6 +97,22 @@ function buildOdlPreviewPagesFromDocument(
   return { pages, needsBackfill }
 }
 
+function odlPreviewCacheCoversDocument(cached: DocumentParseResult, totalPagesHint?: number): boolean {
+  const total = Math.max(1, cached.totalPages || totalPagesHint || 0)
+  if (total < 1) return false
+  const filled = new Set(
+    cached.pages
+      .filter((page) => Boolean(page.text?.trim() || page.markdown?.trim()))
+      .map((page) => page.pageNumber),
+  )
+  // Progressive probe merges only the first pages — do not treat that as a full doc.
+  if (filled.size < Math.min(total, Math.max(3, Math.ceil(total * 0.5)))) return false
+  for (let pageNumber = 1; pageNumber <= total; pageNumber += 1) {
+    if (!filled.has(pageNumber)) return false
+  }
+  return true
+}
+
 export async function getOdlPreviewDocument(
   request: PdfDocumentParseRequest,
   timeoutMs: number,
@@ -105,7 +121,11 @@ export async function getOdlPreviewDocument(
   const cacheKey = odlPreviewDocumentKey(request.filePath)
   if (forceRefresh) odlPreviewDocumentCache.delete(cacheKey)
   const cached = odlPreviewDocumentCache.get(cacheKey)
-  if (cached) return cached
+  if (cached && odlPreviewCacheCoversDocument(cached, request.pageRange?.end)) return cached
+  if (cached && !odlPreviewCacheCoversDocument(cached, request.pageRange?.end)) {
+    // Incomplete progressive merge — fall through to a real full-document parse.
+    odlPreviewDocumentCache.delete(cacheKey)
+  }
   const inflight = odlPreviewDocumentInflight.get(cacheKey)
   if (inflight) return inflight
   const effectiveTimeout = resolveOdlPreviewParseTimeoutMs(timeoutMs)

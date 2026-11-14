@@ -64,6 +64,12 @@ export function useSessionManager(
     }
   }, [activeSessionId, workspaceId])
 
+  /** Leave the shared pane with no topic (e.g. 课堂 with no course). */
+  const clearActiveSession = useCallback(() => {
+    setActiveSessionId(null)
+    setError(null)
+  }, [])
+
   const renameSession = useCallback(async (sessionId: string, title: string) => {
     const trimmed = title.trim()
     if (!trimmed) return null
@@ -147,6 +153,7 @@ export function useSessionManager(
     loadSessions,
     createSession,
     selectSession,
+    clearActiveSession,
     renameSession,
     deleteSession,
   }

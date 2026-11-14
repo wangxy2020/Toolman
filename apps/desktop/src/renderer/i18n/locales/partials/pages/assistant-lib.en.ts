@@ -131,7 +131,7 @@ export const assistantLibPageEn = {
   learningBadge: 'Learn',
   shareGroup: 'Share to group',
   shareCopied: 'Share summary copied — paste into group or community',
-  emptySessions: 'No learning sessions yet. Add a course to start.',
+  emptySessions: 'No courses yet. Click above to add one.',
   emptyCatalogNoKb: 'No catalog yet',
   emptyCatalogNoChapters: 'No catalog yet',
   presets: {

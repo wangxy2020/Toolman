@@ -97,6 +97,7 @@ export function useTranslationDocumentWorkspace(options: Options) {
     startTranslation,
     startParse,
     stopParse,
+    clearPageContents,
     stopTranslation,
     focusPage,
     translatePage,
@@ -169,12 +170,21 @@ export function useTranslationDocumentWorkspace(options: Options) {
   const startParseRef = useRef(startParse)
   const stopTranslationRef = useRef(stopTranslation)
   const stopParseRef = useRef(stopParse)
+  const clearPageContentsRef = useRef(clearPageContents)
   startTranslationRef.current = startTranslation
   startParseRef.current = startParse
   stopTranslationRef.current = stopTranslation
   stopParseRef.current = stopParse
+  clearPageContentsRef.current = clearPageContents
   bootstrappingRef.current = bootstrapping
   modelIdRef.current = modelId
+
+  const runClearPageContents = useCallback(() => {
+    // Drop saved snapshot merge source first so the next pages effect cannot
+    // rehydrate cleared bodies from the previous autosave.
+    savedSnapshotsRef.current = []
+    clearPageContentsRef.current()
+  }, [])
 
   const runStartTranslation = useCallback(() => {
     if (!modelIdRef.current) return false
@@ -217,9 +227,10 @@ export function useTranslationDocumentWorkspace(options: Options) {
       startParse: runStartParse,
       stopTranslation: () => stopTranslationRef.current(),
       stopParse: () => stopParseRef.current(),
+      clearPageContents: runClearPageContents,
       getPageSnapshots: collectPageSnapshots,
     }),
-    [collectPageSnapshots, runStartParse, runStartTranslation, scrollToPage],
+    [collectPageSnapshots, runClearPageContents, runStartParse, runStartTranslation, scrollToPage],
   )
 
   useEffect(() => {
@@ -229,11 +240,19 @@ export function useTranslationDocumentWorkspace(options: Options) {
       startParse: runStartParse,
       stopTranslation: () => stopTranslationRef.current(),
       stopParse: () => stopParseRef.current(),
+      clearPageContents: runClearPageContents,
       getPageSnapshots: collectPageSnapshots,
     }
     onRegisterActions?.(actions)
     return () => onRegisterActions?.(null)
-  }, [collectPageSnapshots, onRegisterActions, runStartParse, runStartTranslation, scrollToPage])
+  }, [
+    collectPageSnapshots,
+    onRegisterActions,
+    runClearPageContents,
+    runStartParse,
+    runStartTranslation,
+    scrollToPage,
+  ])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {

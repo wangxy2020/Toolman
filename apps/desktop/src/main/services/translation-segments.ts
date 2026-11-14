@@ -1,4 +1,7 @@
-const MAX_SEGMENT_CHARS = 2000
+/** Soft target per model call — keep under typical 4k–8k output budgets. */
+export const MAX_SEGMENT_CHARS = 1800
+/** Hard ceiling for a single table/prose unit before row/sentence bisection. */
+export const MAX_FORCE_SPLIT_CHARS = 3600
 
 /**
  * Split source text into model-call segments.
@@ -46,14 +49,15 @@ export function splitTranslationSegments(text: string): string[] {
     return [normalized]
   }
 
-  // Never bisect real tables — translate each table as one segment unit.
+  // Prefer whole tables as units, but bisect oversized ones so output maxTokens
+  // cannot truncate a single huge Contract Data grid mid-response.
   if (/<table\b/i.test(normalized) || /^\s*\|.+\|\s*$/m.test(normalized)) {
     const segments: string[] = []
     let rest = normalized
     while (rest) {
       const tableUnit = extractLeadingTableUnit(rest)
       if (tableUnit) {
-        segments.push(tableUnit.unit)
+        segments.push(...splitOversizedTableUnit(tableUnit.unit))
         rest = tableUnit.rest
         continue
       }
@@ -101,7 +105,7 @@ export function splitTranslationSegments(text: string): string[] {
   return segments
 }
 
-function splitLongParagraph(paragraph: string, maxChars: number): string[] {
+export function splitLongParagraph(paragraph: string, maxChars: number): string[] {
   if (paragraph.length <= maxChars) return [paragraph]
 
   const pieces: string[] = []
@@ -128,4 +132,76 @@ function splitLongParagraph(paragraph: string, maxChars: number): string[] {
     }
     return chunks
   })
+}
+
+/** Split a too-large HTML/GFM table by row groups while keeping header rows. */
+export function splitOversizedTableUnit(unit: string): string[] {
+  const trimmed = unit.trim()
+  if (trimmed.length <= MAX_FORCE_SPLIT_CHARS) return [trimmed]
+
+  if (/^<table\b/i.test(trimmed)) {
+    const open = trimmed.match(/^<table\b[^>]*>/i)?.[0] ?? '<table>'
+    const close = '</table>'
+    const inner = trimmed.slice(open.length).replace(/<\/table>\s*$/i, '')
+    const rows = inner.match(/<tr\b[\s\S]*?<\/tr>/gi) ?? []
+    if (rows.length < 4) {
+      return splitLongParagraph(trimmed, MAX_SEGMENT_CHARS)
+    }
+    const headerRows = rows.slice(0, Math.min(2, rows.length))
+    const bodyRows = rows.slice(headerRows.length)
+    const chunks: string[] = []
+    let batch: string[] = []
+    let batchLen = open.length + close.length + headerRows.join('').length
+
+    const flush = () => {
+      if (batch.length === 0) return
+      chunks.push(`${open}${headerRows.join('')}${batch.join('')}${close}`)
+      batch = []
+      batchLen = open.length + close.length + headerRows.join('').length
+    }
+
+    for (const row of bodyRows) {
+      if (batch.length > 0 && batchLen + row.length > MAX_SEGMENT_CHARS) flush()
+      batch.push(row)
+      batchLen += row.length
+    }
+    flush()
+    return chunks.length > 0 ? chunks : [trimmed]
+  }
+
+  // GFM pipe tables — keep header + separator, chunk body rows.
+  const lines = trimmed.split('\n')
+  const header = lines.slice(0, 2)
+  const body = lines.slice(2)
+  if (header.length < 2 || body.length < 2) {
+    return splitLongParagraph(trimmed, MAX_SEGMENT_CHARS)
+  }
+  const chunks: string[] = []
+  let batch: string[] = []
+  let batchLen = header.join('\n').length
+  const flush = () => {
+    if (batch.length === 0) return
+    chunks.push([...header, ...batch].join('\n'))
+    batch = []
+    batchLen = header.join('\n').length
+  }
+  for (const line of body) {
+    if (batch.length > 0 && batchLen + line.length + 1 > MAX_SEGMENT_CHARS) flush()
+    batch.push(line)
+    batchLen += line.length + 1
+  }
+  flush()
+  return chunks.length > 0 ? chunks : [trimmed]
+}
+
+/** Force-split any leftover oversized unit when a model call still hits length. */
+export function forceSplitTranslationSegment(text: string): string[] {
+  const trimmed = text.trim()
+  if (!trimmed) return []
+  if (trimmed.length <= MAX_SEGMENT_CHARS) return [trimmed]
+  if (/<table\b/i.test(trimmed) || /^\s*\|.+\|\s*$/m.test(trimmed)) {
+    const parts = splitOversizedTableUnit(trimmed)
+    if (parts.length > 1) return parts
+  }
+  return splitLongParagraph(trimmed, Math.max(600, Math.ceil(trimmed.length / 2)))
 }

@@ -20,7 +20,7 @@ export const modulesEn = {
     workflow: {
       title: 'Automation',
       addLabel: 'New task',
-      headerAll: 'All automations',
+      headerAll: 'Automation',
       sidebarEmptyHint: 'No tasks yet. Click above to create one.',
       contentEmptyTitle: 'Automation',
       contentEmptyHint: 'Create tasks and subtasks on the left, then chat on the right like Agents.',
@@ -63,7 +63,7 @@ export const modulesEn = {
       title: 'Classroom',
       addLabel: 'Start course',
       headerAll: 'Teaching presets',
-      sidebarEmptyHint: 'No learning sessions yet. Pick a preset to start.',
+      sidebarEmptyHint: 'No courses yet. Click above to add one.',
       contentEmptyTitle: 'Classroom',
       contentEmptyHint:
         'Socratic learning and open tools. Choose a preset, bind a textbook knowledge base, then start.',

@@ -253,9 +253,9 @@ export function WorkflowSidebar({
 
         <div className="tm-sidebar-list">
           {loading && tasks.length === 0 ? (
-            <div className="tm-empty">{t('common.loading')}</div>
+            <div className="tm-session-empty">{t('common.loading')}</div>
           ) : tasks.length === 0 ? (
-            <div className="tm-empty">{t('modules.workflow.sidebarEmptyHint')}</div>
+            <div className="tm-session-empty">{t('modules.workflow.sidebarEmptyHint')}</div>
           ) : (
             tasks.map((task) => {
               const children = childrenByParent.get(task.id) ?? []

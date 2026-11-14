@@ -129,7 +129,7 @@ export const assistantLibPageZhCN = {
   learningBadge: '学习',
   shareGroup: '分享到群组',
   shareCopied: '已复制分享摘要，可粘贴到群组或社区',
-  emptySessions: '暂无学习会话。点击添加课程开始。',
+  emptySessions: '暂无课程，点击上方添加',
   emptyCatalogNoKb: '暂无目录',
   emptyCatalogNoChapters: '暂无目录',
   presets: {

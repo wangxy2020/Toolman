@@ -4,17 +4,16 @@ import {
   DOCUMENT_PAGE_FIT_TABLE_CAPS,
   type DocumentPageFitRecord,
 } from './document-page-fit'
+import {
+  resolveDocumentPageCardMode,
+  resolveDocumentPageCardView,
+} from './document-page-card-view'
 import { useFitDocumentPageContent } from './useFitDocumentPageContent'
 import { TranslationDocumentMarkdown } from './TranslationDocumentMarkdown'
 import { TranslationDocumentTranslatedText } from './TranslationDocumentTranslatedText'
-import { looksLikeTranslationTable } from './translation-display-table'
 import {
   emptyPageMessageKey,
   HYBRID_UNAVAILABLE_ERROR,
-  hasVisibleParsePreviewBody,
-  resolveDocumentPageDisplayText,
-  usesDocumentPageTableFit,
-  usesRichDocumentPagePreview,
 } from './translation-page-source-quality'
 import type { DocumentPageState } from './useDocumentPageTranslation'
 
@@ -34,6 +33,7 @@ const DocumentPageCard = memo(function DocumentPageCard({
   totalPages,
   hasModel,
   parseArmed,
+  translationArmed = false,
   heavyContent,
   fitToPage = false,
   clipToPage = false,
@@ -47,6 +47,7 @@ const DocumentPageCard = memo(function DocumentPageCard({
   totalPages: number
   hasModel: boolean
   parseArmed: boolean
+  translationArmed?: boolean
   /** Rich markdown/HTML for the final parse/translate layout. */
   heavyContent: boolean
   /** Lock text into the PDF page box — shrink type to fontMin, then scroll if needed. */
@@ -63,38 +64,9 @@ const DocumentPageCard = memo(function DocumentPageCard({
 }) {
   const pageClip = fitToPage || clipToPage
   const { t } = useI18n()
-  const isTranslated = page.status === 'done' && Boolean(page.translatedText.trim())
-  const isTranslating =
-    page.status === 'translating' || page.status === 'loading-source'
-  const plainText = page.translatedText.trim()
-  // Always prefer the final stored markup when present so scrolling does not
-  // switch a page between plain prose and HTML tables.
-  const rawText = (
-    isTranslated
-      ? page.translatedText
-      : heavyContent
-        ? (page.parsedMarkdown ?? page.translatedText)
-        : page.translatedText
-  ).trim()
-  const hasPreview = hasVisibleParsePreviewBody(
-    plainText,
-    isTranslated || !heavyContent ? undefined : page.parsedMarkdown,
-  )
-  const previewMode =
-    hasPreview &&
-    (page.status === 'parsed' ||
-      page.status === 'parsing' ||
-      isTranslating ||
-      page.status === 'done' ||
-      parseArmed)
-  const showRich = previewMode && heavyContent && usesRichDocumentPagePreview(rawText)
-  const displayText = previewMode
-    ? heavyContent
-      ? resolveDocumentPageDisplayText(rawText, showRich)
-      : plainText
-    : plainText
-  const fitTable =
-    heavyContent && (usesDocumentPageTableFit(rawText) || looksLikeTranslationTable(displayText))
+  const mode = resolveDocumentPageCardMode(parseArmed, translationArmed)
+  const { displayText, showRich, fitTable, isTranslated, isTranslating } =
+    resolveDocumentPageCardView(page, mode, heavyContent)
   const persistFit = useCallback(
     (fit: DocumentPageFitRecord) => onFitPersist?.(page.pageNumber, fit),
     [onFitPersist, page.pageNumber],
@@ -102,7 +74,7 @@ const DocumentPageCard = memo(function DocumentPageCard({
   const fitBoxRef = useFitDocumentPageContent(
     // Fit only after scroll settles on the focused page — never mid-fling.
     fitToPage && heavyContent && !deferFit && Boolean(displayText),
-    `${page.pageNumber}:${displayText.length}:${showRich ? 'rich' : 'plain'}:${fitTable ? 'table' : 'prose'}`,
+    `${page.pageNumber}:${displayText.length}:${showRich ? 'rich' : 'plain'}:${fitTable ? 'table' : 'prose'}:${isTranslated ? 'zh' : 'src'}`,
     savedFit,
     persistFit,
     fitTable ? DOCUMENT_PAGE_FIT_TABLE_CAPS : undefined,
@@ -114,19 +86,19 @@ const DocumentPageCard = memo(function DocumentPageCard({
   const statusLabel =
     page.status === 'parsing'
       ? t('translationPage.documents.pageParsing')
-      : page.status === 'loading-source' || page.status === 'translating'
+      : isTranslating
         ? t('translationPage.documents.pageTranslating')
         : page.status === 'error'
           ? t('translationPage.documents.pageError')
           : page.status === 'empty'
             ? t(`translationPage.documents.${emptyPageMessageKey(page.error)}`)
-            : page.status === 'parsed'
+            : page.status === 'parsed' || (page.status === 'done' && mode === 'parse')
               ? t('translationPage.documents.pageParsed')
               : page.status === 'done'
                 ? t('translationPage.documents.pageDone')
                 : t('translationPage.documents.pagePending')
   const canRetry =
-    page.status === 'error' && Boolean(onRetryTranslate) && !parseArmed && hasModel
+    page.status === 'error' && Boolean(onRetryTranslate) && mode !== 'parse' && hasModel
 
   return (
     <article className="tm-translation-doc-page-card">
@@ -175,26 +147,12 @@ const DocumentPageCard = memo(function DocumentPageCard({
               {page.error === HYBRID_UNAVAILABLE_ERROR
                 ? t(`translationPage.documents.${emptyPageMessageKey(page.error)}`)
                 : page.error || t('translationPage.documents.pageError')}
-              {canRetry ? (
-                <>
-                  {' '}
-                  <button
-                    type="button"
-                    className="tm-translation-doc-page-card-retry"
-                    onClick={() => onRetryTranslate?.(page.pageNumber)}
-                  >
-                    {t('translationPage.documents.pageRetry')}
-                  </button>
-                </>
-              ) : null}
             </p>
           ) : page.status === 'empty' ? (
             <p className="tm-translation-doc-page-card-placeholder">
               {t(`translationPage.documents.${emptyPageMessageKey(page.error)}`)}
             </p>
-          ) : page.status === 'parsing' ||
-            page.status === 'loading-source' ||
-            page.status === 'translating' ? (
+          ) : page.status === 'parsing' || isTranslating ? (
             <p className="tm-translation-doc-page-card-placeholder">
               {page.status === 'parsing'
                 ? t('translationPage.documents.pageParsing')
@@ -202,7 +160,7 @@ const DocumentPageCard = memo(function DocumentPageCard({
             </p>
           ) : page.status === 'parsed' || page.status === 'done' ? null : (
             <p className="tm-translation-doc-page-card-placeholder">
-              {parseArmed
+              {mode === 'parse'
                 ? t('translationPage.documents.pageClickParse')
                 : hasModel
                   ? t('translationPage.documents.pageClickTranslate')

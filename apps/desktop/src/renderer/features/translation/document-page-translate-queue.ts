@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 import type { TranslationLanguage } from '@toolman/shared'
+import { getCachedPageText, pageTextCacheKey } from './document-page-cache'
 import {
   enqueuePage,
   sortQueueWithPriority,
@@ -16,6 +17,7 @@ export const PAGE_TRANSLATE_TIMEOUT_MS = 120_000
 
 interface TranslateQueueDeps {
   filePath: string | null
+  documentId: string | null
   modelId: string | null
   languages: [TranslationLanguage, TranslationLanguage]
   autoDetectSource: boolean
@@ -66,9 +68,10 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
 
 export function useDocumentPageTranslateQueue({
   filePath,
+  documentId,
   modelId,
   languages,
-  autoDetectSource: _autoDetectSource,
+  autoDetectSource,
   enabled,
   refs,
   setters,
@@ -95,18 +98,54 @@ export function useDocumentPageTranslateQueue({
       // Always enter try/finally so a page marked translating cannot spin forever.
       refs.translateInFlightRef.current.add(pageNumber)
       refs.translatePageGenerationRef.current.set(pageNumber, generation)
+      let settled = false
+      const settle = (patch: Partial<DocumentPageState>, enqueueNext = false) => {
+        if (generation !== refs.generationRef.current) return
+        settled = true
+        updatePage(pageNumber, patch)
+        if (enqueueNext) enqueueNextTranslatePage(pageNumber)
+      }
       try {
         if (!enabled || !filePath || !modelId) {
-          updatePage(pageNumber, {
+          settle({
             status: 'error',
             error: !modelId ? '未选择翻译模型' : '翻译未就绪',
-          })
+          }, true)
           return
         }
 
         const current = refs.pagesRef.current.find((page) => page.pageNumber === pageNumber)
-        if (current?.status === 'done' && current.translatedText.trim()) return
-        if (current?.status === 'empty') return
+        if (current?.status === 'done' && current.translatedText.trim()) {
+          settled = true
+          enqueueNextTranslatePage(pageNumber)
+          return
+        }
+        if (current?.status === 'empty') {
+          settled = true
+          enqueueNextTranslatePage(pageNumber)
+          return
+        }
+
+        // Session cache already has Chinese — settle immediately so the header
+        // spinner stops while the right pane already shows the cached body.
+        if (documentId && modelId) {
+          const cached = getCachedPageText(
+            pageTextCacheKey(documentId, pageNumber, modelId, languages, autoDetectSource),
+          )
+          if (cached?.status === 'done' && cached.translatedText.trim()) {
+            settle(
+              {
+                status: 'done',
+                translatedText: cached.translatedText,
+                sourceText: cached.sourceText || current?.sourceText || '',
+                parsedMarkdown: cached.parsedMarkdown,
+                error: undefined,
+              },
+              true,
+            )
+            return
+          }
+        }
 
         scheduleSourcePrefetch(pageNumber, generation)
 
@@ -121,12 +160,12 @@ export function useDocumentPageTranslateQueue({
         }
 
         if (!sourceText || isTranslationPageSourceInsufficient(sourceText)) {
-          updatePage(pageNumber, {
+          settle({
             status: 'empty',
             translatedText: '',
             sourceText: '',
             error: NO_VALID_PAGE_TEXT,
-          })
+          }, true)
           return
         }
 
@@ -145,44 +184,48 @@ export function useDocumentPageTranslateQueue({
         if (generation !== refs.generationRef.current) return
         const translated = result.text.trim()
         if (!translated) {
-          updatePage(pageNumber, {
+          settle({
             status: 'error',
             error: '翻译结果为空，请重试或更换模型',
-          })
-          enqueueNextTranslatePage(pageNumber)
+          }, true)
           return
         }
-        updatePage(pageNumber, {
+        settle({
           status: 'done',
           translatedText: translated,
-          parsedMarkdown: undefined,
+          // Keep parsedMarkdown so the user can switch back to parse preview.
           error: undefined,
-        })
-        enqueueNextTranslatePage(pageNumber)
+        }, true)
       } catch (error) {
-        if (generation !== refs.generationRef.current) return
-        updatePage(pageNumber, {
+        settle({
           status: 'error',
           error: error instanceof Error ? error.message : 'translate failed',
-        })
-        enqueueNextTranslatePage(pageNumber)
+        }, true)
       } finally {
         refs.translateInFlightRef.current.delete(pageNumber)
         const ownedGeneration = refs.translatePageGenerationRef.current.get(pageNumber)
         refs.translatePageGenerationRef.current.delete(pageNumber)
-        // Only idle a stuck page if THIS generation still owns it — never clobber a newer run.
-        if (
-          generation !== refs.generationRef.current &&
-          ownedGeneration === generation
-        ) {
-          const stuck = refs.pagesRef.current.find((page) => page.pageNumber === pageNumber)
-          if (stuck?.status === 'translating' || stuck?.status === 'loading-source') {
+        const stuck = refs.pagesRef.current.find((page) => page.pageNumber === pageNumber)
+        const stillBusy =
+          stuck?.status === 'translating' || stuck?.status === 'loading-source'
+        if (stillBusy) {
+          // Superseded run — park the page without wiping a newer generation's claim.
+          if (generation !== refs.generationRef.current && ownedGeneration === generation) {
             updatePage(pageNumber, { status: 'idle', error: undefined })
+          } else if (!settled && generation === refs.generationRef.current) {
+            // Same generation exited without done/error/empty — never leave「正在翻译」spinning.
+            updatePage(pageNumber, {
+              status: 'error',
+              error: '翻译中断，请重试',
+            })
+            enqueueNextTranslatePage(pageNumber)
           }
         }
       }
     },
     [
+      autoDetectSource,
+      documentId,
       enabled,
       enqueueNextTranslatePage,
       filePath,
@@ -233,6 +276,9 @@ export function useDocumentPageTranslateQueue({
       const current = refs.pagesRef.current.find((page) => page.pageNumber === pageNumber)
       if (current?.status === 'done' && current.translatedText.trim()) return false
       if (current?.status === 'empty') return false
+      // Keep visible errors until the user explicitly retries — scroll/ensure must
+      // not clear a red error and flip the chip back to「正在翻译」in a loop.
+      if (current?.status === 'error' && !priority) return false
 
       if (!refs.translateQueueRef.current.includes(pageNumber)) {
         updatePage(pageNumber, {
@@ -270,6 +316,91 @@ export function useDocumentPageTranslateQueue({
   const startTranslation = useCallback(() => {
     if (!modelId || refs.pagesRef.current.length === 0) return false
 
+    // Switch UI mode immediately so the right pane leaves parse-armed preview
+    // rules before the first page reaches status=done.
+    setters.setParseArmed(false)
+    refs.translationArmedRef.current = true
+    setters.setTranslationArmed(true)
+    setters.setOdlWarmRunning(false)
+    setters.setHybridBackfillRunning(false)
+
+    // Normalize pages first (including leftover parsing) before bumping
+    // generation, so parse→translate switches always enqueue real work.
+    const resetPages = refs.pagesRef.current.map((page) => {
+      if (page.status === 'empty') {
+        return {
+          ...page,
+          status: 'idle' as const,
+          sourceText: '',
+          translatedText: '',
+          parsedMarkdown: '',
+          error: undefined,
+        }
+      }
+      if (
+        page.status === 'translating' ||
+        page.status === 'loading-source' ||
+        page.status === 'parsing'
+      ) {
+        const preview = page.parsedMarkdown || page.translatedText
+        if (preview?.trim()) {
+          const fromPreview = toPlainTranslationSource(
+            page.sourceText.trim() || preview,
+          )
+          return {
+            ...page,
+            status: 'parsed' as const,
+            sourceText: fromPreview || page.sourceText,
+            translatedText: '',
+            parsedMarkdown: preview,
+            error: undefined,
+          }
+        }
+        return { ...page, status: 'idle' as const, error: undefined }
+      }
+      if (page.status === 'parsed') {
+        const fromPreview = toPlainTranslationSource(
+          page.sourceText.trim() || page.parsedMarkdown || page.translatedText,
+        )
+        const sourceText = fromPreview || page.sourceText
+        // Keep parse preview only in parsedMarkdown. Leave translatedText empty so
+        // a finished Chinese result clearly replaces the preview (status=done).
+        const preview = page.parsedMarkdown || page.translatedText
+        return {
+          ...page,
+          sourceText,
+          translatedText: '',
+          parsedMarkdown: preview,
+          error: undefined,
+        }
+      }
+      return page
+    })
+
+    const pending = resetPages.filter(
+      (page) =>
+        page.status === 'idle' ||
+        page.status === 'error' ||
+        page.status === 'parsed',
+    )
+
+    // Already fully translated (live or restored): keep the translate view armed
+    // without wiping done pages — that left the header spinning while the right
+    // pane still painted cached/snapshot Chinese.
+    if (pending.length === 0) {
+      const allComplete =
+        resetPages.length > 0 &&
+        resetPages.every((page) => page.status === 'done' || page.status === 'empty')
+      if (allComplete) {
+        refs.pagesRef.current = resetPages
+        setters.setPages(resetPages)
+        return true
+      }
+      refs.translationArmedRef.current = false
+      setters.setTranslationArmed(false)
+      return false
+    }
+
     refs.generationRef.current += 1
     refs.ocrQueueRef.current = []
     refs.ocrWorkerRunningRef.current = false
@@ -281,67 +412,6 @@ export function useDocumentPageTranslateQueue({
     refs.translateInFlightRef.current.clear()
     refs.translatePageGenerationRef.current.clear()
     refs.inFlightRef.current.clear()
-    setters.setOdlWarmRunning(false)
-    setters.setHybridBackfillRunning(false)
-    setters.setParseArmed(false)
-    refs.translationArmedRef.current = true
-    setters.setTranslationArmed(true)
-
-    let resetPages = refs.pagesRef.current.map((page) => {
-      if (page.status === 'empty') {
-        return {
-          ...page,
-          status: 'idle' as const,
-          sourceText: '',
-          translatedText: '',
-          parsedMarkdown: '',
-          error: undefined,
-        }
-      }
-      if (page.status === 'translating' || page.status === 'loading-source') {
-        return { ...page, status: 'idle' as const, error: undefined }
-      }
-      if (page.status === 'parsed') {
-        const fromPreview = toPlainTranslationSource(
-          page.sourceText.trim() || page.parsedMarkdown || page.translatedText,
-        )
-        const sourceText = fromPreview || page.sourceText
-        // Keep English in parsedMarkdown for mid-translate preview; clear
-        // translatedText so「已解析」English is not mistaken for Chinese.
-        return {
-          ...page,
-          sourceText,
-          translatedText: '',
-          parsedMarkdown: page.parsedMarkdown || page.translatedText,
-          error: undefined,
-        }
-      }
-      return page
-    })
-
-    let pending = resetPages.filter(
-      (page) =>
-        page.status === 'idle' ||
-        page.status === 'error' ||
-        page.status === 'parsed',
-    )
-
-    if (pending.length === 0) {
-      resetPages = resetPages.map((page) => {
-        if (page.status !== 'done') return page
-        return {
-          ...page,
-          status: 'idle' as const,
-          translatedText: '',
-          error: undefined,
-        }
-      })
-      pending = resetPages.filter(
-        (page) => page.status === 'idle' || page.status === 'error',
-      )
-    }
-
-    if (pending.length === 0) return false
 
     refs.pagesRef.current = resetPages
     setters.setPages(resetPages)

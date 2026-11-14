@@ -100,6 +100,7 @@ export function useTranslationRecords(
     openDocument: documentApi.openDocument,
     selectDocument: documentApi.selectDocument,
     clearActiveDocument: documentApi.clearActiveDocument,
+    resetDocumentContent: documentApi.resetDocumentContent,
     enterDocumentsSection: documentApi.enterDocumentsSection,
     startRenameDocument: documentApi.startRenameDocument,
     cancelRenameDocument: documentApi.cancelRenameDocument,
@@ -107,6 +108,7 @@ export function useTranslationRecords(
     saveContrast: contrastApi.saveContrast,
     saveDocument: documentApi.saveDocument,
     updateDocumentSourceText: documentApi.updateDocumentSourceText,
+    updateDocumentPageSnapshots: documentApi.updateDocumentPageSnapshots,
     updateDocumentPageRemark: documentApi.updateDocumentPageRemark,
     deleteDocument: documentApi.deleteDocument,
   }

@@ -17,9 +17,8 @@ export const PARSE_TIMEOUT_MS = 20_000
 /** Full-document ODL parse — includes Hybrid OCR when enabled in app settings. */
 export const ODL_PARSE_TIMEOUT_MS = 45 * 60 * 1000
 /**
- * First progressive batch — kept small so digital PDFs can probe scan-vs-text
- * quickly, paint pages 1–N immediately, then upgrade via one full-document apply.
- * Scanned PDFs apply this probe then continue with larger batches below.
+ * First progressive batch — kept small so scan-vs-text detection is cheap.
+ * Later batches paint as they finish so pages beyond 1–2 stay visible mid-parse.
  */
 export const ODL_PROGRESSIVE_FIRST_BATCH = 2
 /**

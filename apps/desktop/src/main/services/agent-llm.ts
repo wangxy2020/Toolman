@@ -10,7 +10,10 @@ import {
   isCloudProviderWithoutUserKey,
   recordDesktopTrialLlmUsage,
 } from './trial-llm.service'
-import { splitTranslationSegments } from './translation-segments'
+import {
+  forceSplitTranslationSegment,
+  splitTranslationSegments,
+} from './translation-segments'
 
 const gateway = createModelGateway()
 
@@ -21,7 +24,9 @@ const TRANSLATION_LANGUAGE_LABELS = {
 
 const TRANSLATE_TIMEOUT_MS = 120_000
 /** Below this size, always use a single model call. */
-const SINGLE_SHOT_MAX_CHARS = 6000
+const SINGLE_SHOT_MAX_CHARS = 2800
+/** Cap output tokens — document pages with tables need more than 4k. */
+const TRANSLATE_MAX_OUTPUT_TOKENS = 8192
 /** Max concurrent segment requests per translate call. */
 const SEGMENT_CONCURRENCY = 3
 
@@ -63,18 +68,22 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
   })
 }
 
+function resolveTranslateMaxTokens(textLength: number): number {
+  // EN→ZH + HTML/GFM table markup often needs ~1 token per 1–2 source chars.
+  const estimated = Math.ceil(textLength * 0.85) + 256
+  return Math.min(TRANSLATE_MAX_OUTPUT_TOKENS, Math.max(1024, estimated))
+}
+
 async function translateSegment(options: {
   text: string
   model: string
   providerConfig: NonNullable<ReturnType<typeof getProviderConfig>>
   targetLabel: string
+  depth?: number
 }): Promise<string> {
-  const { text, model, providerConfig, targetLabel } = options
+  const { text, model, providerConfig, targetLabel, depth = 0 } = options
 
-  // Estimate output budget from content size, not raw line count — ODL often
-  // emits one-token lines which inflated timeouts and still truncated prose.
-  const charBudget = Math.ceil(text.length * 1.2)
-  const maxTokens = Math.min(4096, Math.max(768, Math.ceil(charBudget / 2)))
+  const maxTokens = resolveTranslateMaxTokens(text.length)
   const controller = new AbortController()
   const abortTimer = setTimeout(() => controller.abort(), TRANSLATE_TIMEOUT_MS)
   const extraBody = providerConfig.type === 'ollama' ? { think: false } : undefined
@@ -107,6 +116,20 @@ async function translateSegment(options: {
     throw new ProviderError('翻译结果为空，请重试或更换模型')
   }
   if (result.finishReason === 'length') {
+    // Auto-split and retry instead of failing the whole page translate.
+    if (depth < 2 && text.trim().length > 600) {
+      const chunks = forceSplitTranslationSegment(text)
+      if (chunks.length > 1) {
+        const parts = await translateSegmentsParallel({
+          segments: chunks,
+          model,
+          providerConfig,
+          targetLabel,
+          depth: depth + 1,
+        })
+        return parts.join(detectJoinSeparator(text))
+      }
+    }
     throw new ProviderError('翻译输出被截断，请缩短原文后重试，或更换上下文更长的模型')
   }
   return output
@@ -117,8 +140,9 @@ async function translateSegmentsParallel(options: {
   model: string
   providerConfig: NonNullable<ReturnType<typeof getProviderConfig>>
   targetLabel: string
+  depth?: number
 }): Promise<string[]> {
-  const { segments, model, providerConfig, targetLabel } = options
+  const { segments, model, providerConfig, targetLabel, depth = 0 } = options
   const results = new Array<string>(segments.length)
   let nextIndex = 0
 
@@ -131,6 +155,7 @@ async function translateSegmentsParallel(options: {
         model,
         providerConfig,
         targetLabel,
+        depth,
       })
     }
   }

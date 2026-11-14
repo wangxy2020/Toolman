@@ -8,8 +8,10 @@ import {
   isNegligibleDocumentFitBoxChange,
   isSameDocumentPageFit,
   resolveDocumentPageFit,
+  resolveDocumentPageFitCapsForWidth,
   resolveDocumentPageFitScale,
   scaleDocumentPageFitForBox,
+  shouldRemeasureDocumentPageFitForWidth,
   tightenDocumentPageFit,
   type DocumentPageFitCaps,
   type DocumentPageFitRecord,
@@ -20,6 +22,10 @@ import {
   subscribeSharedDocumentPageFit,
   type DocumentFitKind,
 } from './document-page-fit-shared'
+
+function round1(value: number): number {
+  return Math.round(value * 10) / 10
+}
 
 function readAvailableHeight(box: HTMLElement, boxHeight: number): number {
   const style = window.getComputedStyle(box)
@@ -136,26 +142,64 @@ export function useFitDocumentPageContent(
       const boxWidth = box.clientWidth
       if (boxHeight < 1 || boxWidth < 1) return
 
+      // Width-aware caps: narrow pane → smaller type; wide pane → larger type.
+      const widthCaps = resolveDocumentPageFitCapsForWidth(boxWidth, caps)
       measuringRef.current = true
-      applyDocumentPageFitVars(box, documentPageFitReset(caps))
       const inner = box.firstElementChild as HTMLElement | null
       const availableHeight = readAvailableHeight(box, boxHeight)
-      let nextType = resolveDocumentPageFit(readContentHeight(box, inner), availableHeight, caps)
-      applyDocumentPageFitVars(box, { ...nextType, scale: 1 })
-      for (let step = 0; step < 4; step += 1) {
-        const fittedHeight = readContentHeight(box, inner)
-        if (fittedHeight <= availableHeight + 1) break
-        const tighter = tightenDocumentPageFit(nextType, fittedHeight, availableHeight, caps)
-        if (
-          tighter.fontSize === nextType.fontSize &&
-          tighter.lineHeight === nextType.lineHeight &&
-          tighter.padding === nextType.padding
-        ) {
-          break
-        }
-        nextType = tighter
+      // Start from previous/shared size — resetting to fontMax every pass caused
+      // visible 字号 jitter (large → small → shared median).
+      const previous = measuredFitRef.current
+      const shared = documentId ? getSharedDocumentPageFit(documentId, fitKind) : null
+      const start = previous
+        ? {
+            fontSize: Math.max(
+              widthCaps.fontMin,
+              Math.min(widthCaps.fontMax, round1(previous.fontSize)),
+            ),
+            lineHeight: previous.lineHeight,
+            padding: Math.max(
+              widthCaps.padMin,
+              Math.min(widthCaps.padMax, Math.round(previous.padding)),
+            ),
+          }
+        : shared
+          ? {
+              fontSize: Math.max(
+                widthCaps.fontMin,
+                Math.min(widthCaps.fontMax, shared.fontSize),
+              ),
+              lineHeight: shared.lineHeight,
+              padding: Math.max(widthCaps.padMin, Math.min(widthCaps.padMax, shared.padding)),
+            }
+          : documentPageFitReset(widthCaps)
+      applyDocumentPageFitVars(box, { ...start, scale: 1 })
+      let nextType = { ...start }
+      const height = readContentHeight(box, inner)
+      if (height > availableHeight + 1) {
+        nextType = resolveDocumentPageFit(height, availableHeight, widthCaps)
         applyDocumentPageFitVars(box, { ...nextType, scale: 1 })
+        for (let step = 0; step < 3; step += 1) {
+          const fittedHeight = readContentHeight(box, inner)
+          if (fittedHeight <= availableHeight + 1) break
+          const tighter = tightenDocumentPageFit(
+            nextType,
+            fittedHeight,
+            availableHeight,
+            widthCaps,
+          )
+          if (
+            tighter.fontSize === nextType.fontSize &&
+            tighter.lineHeight === nextType.lineHeight &&
+            tighter.padding === nextType.padding
+          ) {
+            break
+          }
+          nextType = tighter
+          applyDocumentPageFitVars(box, { ...nextType, scale: 1 })
+        }
       }
+
       let scale = 1
       const overflowHeight = readContentHeight(box, inner)
       if (overflowHeight > availableHeight + 1) {
@@ -220,7 +264,11 @@ export function useFitDocumentPageContent(
         return
       }
       if (isNegligibleDocumentFitBoxChange(measured, boxWidth, boxHeight)) return
-      // Keep 字号 stable on maximize / resize — only refresh recorded box size.
+      // Significant width change → full remeasure so type tracks the pane.
+      if (shouldRemeasureDocumentPageFitForWidth(measured.boxWidth, boxWidth)) {
+        measure()
+        return
+      }
       const scaled = scaleDocumentPageFitForBox(measured, boxWidth, boxHeight, caps)
       measuredFitRef.current = { ...measured, ...scaled, boxWidth, boxHeight }
       applyDocumentPageFitVars(box, measuredFitRef.current)

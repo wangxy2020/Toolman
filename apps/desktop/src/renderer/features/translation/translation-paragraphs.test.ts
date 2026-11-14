@@ -149,6 +149,57 @@ describe('reflowTranslationDisplayLines', () => {
     expect(reflowed.split('\n').length).toBeLessThan(10)
     expect(reflowed).not.toMatch(/^■/m)
   })
+
+  it('keeps distinct outline levels on separate lines', () => {
+    const outline = [
+      '1. Scope of the Works and the obligations of the Contractor under this Agreement',
+      '1.1 The Contractor shall carry out the Works in accordance with the Contract',
+      '(a) design and engineering of the plant and equipment',
+      '(b) procurement and delivery to the Site',
+      'i. inspection and testing at the manufacturer premises',
+      '1.1.1 Samples shall be approved by the Engineer',
+      '1.2 The Employer shall give access to the Site',
+    ].join('\n')
+    const lines = reflowTranslationDisplayLines(outline)
+      .split('\n')
+      .filter((line) => line.trim())
+    expect(lines).toEqual(outline.split('\n'))
+  })
+
+  it('does not glue a bare top-level marker onto a nested marker line', () => {
+    const lines = reflowTranslationDisplayLines(
+      ['1.', '1.1 The Contractor shall perform the Works', '(a) design', 'i. testing'].join('\n'),
+    )
+      .split('\n')
+      .filter((line) => line.trim())
+    expect(lines[0]).toBe('1.')
+    expect(lines).toContain('1.1 The Contractor shall perform the Works')
+    expect(lines).toContain('(a) design')
+    expect(lines).toContain('i. testing')
+  })
+
+  it('splits glued nested markers after sentence punctuation', () => {
+    const lines = reflowTranslationDisplayLines(
+      '1. Scope of Works. 1.1 The Contractor shall deliver; (a) design and engineering',
+    )
+      .split('\n')
+      .filter((line) => line.trim())
+    expect(lines).toEqual([
+      '1. Scope of Works.',
+      '1.1 The Contractor shall deliver;',
+      '(a) design and engineering',
+    ])
+  })
+
+  it('keeps marker-only nested lines separate and decimals intact', () => {
+    const lines = reflowTranslationDisplayLines(['1.', '1.1', '(a)', 'ii.'].join('\n')).split('\n')
+    expect(lines.filter((line) => line.trim())).toEqual(['1.', '1.1', '(a)', 'ii.'])
+    const decimal = reflowTranslationDisplayLines(
+      'The Contractor claims an additional amount of approximately 3.5 million shillings for the delay.',
+    )
+    expect(decimal).toContain('3.5 million shillings')
+    expect(decimal).not.toMatch(/3\.\s*\n\s*5/)
+  })
 })
 
 describe('withMarkdownHardLineBreaks', () => {

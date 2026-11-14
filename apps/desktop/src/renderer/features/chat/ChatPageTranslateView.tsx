@@ -42,8 +42,10 @@ export function ChatPageTranslateView({
       }}
       onOpenDocumentPath={translation.openDocument}
       onUpdateDocumentSourceText={translation.updateDocumentSourceText}
+      onUpdateDocumentPageSnapshots={translation.updateDocumentPageSnapshots}
       onUpdateDocumentPageRemark={translation.updateDocumentPageRemark}
       onClearActiveDocument={translation.clearActiveDocument}
+      onResetDocumentContent={translation.resetDocumentContent}
     />
   )
 }

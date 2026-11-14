@@ -25,6 +25,7 @@ import {
   resolveActiveLearningSession,
   resolveAssistantLibSecondaryLabel,
 } from '../assistant-lib-page-utils'
+import { ensureActiveClassroomChatSession } from '../classroom-session-binding'
 import { createLocalTextbookKnowledgeBase } from '../create-textbook-kb'
 import { useAssistantLibBootstrap } from './useAssistantLibBootstrap'
 import { useAssistantLibPageClass } from './useAssistantLibPageClass'
@@ -52,24 +53,39 @@ export function useAssistantLibPage(props: AssistantLibPageProps) {
   const activeSessionId = props.chat.activeSessionId
   const activeAssistantId = props.chat.activeSession?.assistantId ?? null
   const selectSession = props.chat.selectSession
+  const createSession = props.chat.createSession
 
   useEffect(() => {
     let cancelled = false
     void (async () => {
       const linked = await ensureClassroom()
-      if (cancelled || !linked?.session) return
-      const activeBelongsToLib = activeAssistantId === linked.assistant.id
+      if (cancelled || !linked) return
       const activeWasRemoved = Boolean(
         activeSessionId && linked.removedDefaultIds.includes(activeSessionId),
       )
-      if (!activeBelongsToLib || activeWasRemoved) {
-        await selectSession(linked.session.id)
-      }
+      // Prefer a real course when present; otherwise bind a blank 课堂 assistant topic
+      // (same empty-chat pattern as 自动化 with no tasks).
+      await ensureActiveClassroomChatSession({
+        classroomAssistant: linked.assistant,
+        chat: {
+          sessions: props.chat.sessions,
+          activeSession: activeWasRemoved ? null : props.chat.activeSession,
+          createSession,
+          selectSession,
+        },
+        preferredSessionId: linked.session?.id ?? null,
+      })
     })()
     return () => {
       cancelled = true
     }
-  }, [ensureClassroom, activeAssistantId, activeSessionId, selectSession])
+  }, [
+    ensureClassroom,
+    activeAssistantId,
+    activeSessionId,
+    selectSession,
+    createSession,
+  ])
 
   const activeLearningSession = useMemo(
     () =>

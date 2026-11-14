@@ -9,6 +9,10 @@ import type { TranslationDocumentItem, TranslationDocumentPageSnapshot } from '.
 import type { TranslationDocumentWorkspaceHandle } from './TranslationDocumentWorkspace'
 import type { MutableRefObject } from 'react'
 import type { SaveTranslationDocumentInput } from './useTranslationRecords'
+import {
+  clearDocumentPageTextCaches,
+  clearSourceTextCacheForFile,
+} from './document-page-cache'
 
 export function useTranslationPageActions(options: {
   t: (key: string, vars?: Record<string, string>) => string
@@ -42,7 +46,9 @@ export function useTranslationPageActions(options: {
   onSaveDocument: (input: SaveTranslationDocumentInput) => string | null
   onSaveDocumentToNotes?: (title: string, content: string) => void
   onOpenDocumentPath: (filePath: string) => void
-  onClearActiveDocument: () => void
+  onClearActiveDocument?: () => void
+  onResetDocumentContent?: (documentId: string) => void
+  cancelSnapshotsPersist?: () => void
   showStatus: (message: string) => void
   getPendingPageRemark?: () => { documentId: string; pageNumber: number; text: string } | null
 }) {
@@ -76,7 +82,8 @@ export function useTranslationPageActions(options: {
     onSaveDocument,
     onSaveDocumentToNotes,
     onOpenDocumentPath,
-    onClearActiveDocument,
+    onResetDocumentContent,
+    cancelSnapshotsPersist,
     showStatus,
     getPendingPageRemark,
   } = options
@@ -121,10 +128,25 @@ export function useTranslationPageActions(options: {
     setDocumentError(null)
     setSourceText('')
     setTargetText('')
-    if (isDocuments) onClearActiveDocument()
+    if (isDocuments) {
+      const documentId = activeDocument?.id ?? null
+      const filePath = activeDocument?.filePath ?? null
+      // Clear parse/translate only — keep the document open so the left PDF stays.
+      cancelSnapshotsPersist?.()
+      if (documentId) clearDocumentPageTextCaches(documentId)
+      if (filePath) clearSourceTextCacheForFile(filePath)
+      documentWorkspaceRef.current?.stopTranslation()
+      documentWorkspaceRef.current?.stopParse()
+      documentWorkspaceRef.current?.clearPageContents()
+      if (documentId) onResetDocumentContent?.(documentId)
+    }
   }, [
+    activeDocument?.filePath,
+    activeDocument?.id,
+    cancelSnapshotsPersist,
+    documentWorkspaceRef,
     isDocuments,
-    onClearActiveDocument,
+    onResetDocumentContent,
     setDocumentBusy,
     setDocumentError,
     setDocumentParsing,

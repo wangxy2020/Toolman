@@ -136,9 +136,12 @@ export function useDocumentPageTranslation({
     const safeCount = Math.max(1, Math.floor(count))
     const prev = refs.pagesRef.current
     if (prev.length >= safeCount) return
+    // During an armed parse, new slots must stay「解析中」so progress uses the
+    // real denominator (otherwise 2/2 → 100% while later batches still run).
+    const fillStatus = refs.parseArmedRef.current ? ('parsing' as const) : ('idle' as const)
     const next = [...prev]
     for (let pageNumber = prev.length + 1; pageNumber <= safeCount; pageNumber += 1) {
-      next.push({ pageNumber, sourceText: '', translatedText: '', status: 'idle' })
+      next.push({ pageNumber, sourceText: '', translatedText: '', status: fillStatus })
     }
     refs.pagesRef.current = next
     setPages(next)
@@ -147,12 +150,12 @@ export function useDocumentPageTranslation({
   const commitTotalPages = useCallback(
     (incoming: number) => {
       if (incoming < 1) return
-      setTotalPages((prev) => {
-        const next = Math.max(prev, incoming)
-        refs.totalPagesRef.current = next
-        ensurePageSlots(next)
-        return next
-      })
+      const next = Math.max(refs.totalPagesRef.current, incoming)
+      refs.totalPagesRef.current = next
+      // Expand slots synchronously before the next applyParseResults setState so
+      // the status bar total matches the PDF page count immediately.
+      ensurePageSlots(next)
+      setTotalPages((prev) => Math.max(prev, next))
     },
     [ensurePageSlots, refs],
   )
@@ -175,9 +178,9 @@ export function useDocumentPageTranslation({
     [filePath, refs, updatePage],
   )
 
-  const { applyParseResults, startParse, stopParse } = useDocumentPageParsePipeline({
+  const { applyParseResults, startParse, stopParse, clearPageContents } = useDocumentPageParsePipeline({
     filePath, documentId, workspaceId, modelId, languages, autoDetectSource,
-    refs, setters, ensurePageSlots, commitTotalPages,
+    savedPageSnapshots, refs, setters, ensurePageSlots, commitTotalPages,
   })
   const { prefetchPageSources, scheduleSourcePrefetch, loadPageSource } = useDocumentPageSourcePrefetch({
     filePath, workspaceId, pdfParserBackend, enabled, refs, updatePage, applyParsedSourcePage, commitTotalPages,
@@ -186,7 +189,7 @@ export function useDocumentPageTranslation({
     filePath, workspaceId, enabled, refs, updatePage, commitTotalPages, applyParseResults,
   })
   const { translatePage, startTranslation, stopTranslation } = useDocumentPageTranslateQueue({
-    filePath, modelId, languages, autoDetectSource, enabled, refs, setters, updatePage,
+    filePath, documentId, modelId, languages, autoDetectSource, enabled, refs, setters, updatePage,
     loadPageSource, scheduleSourcePrefetch, prefetchPageSources, translate,
   })
 
@@ -209,7 +212,8 @@ export function useDocumentPageTranslation({
         return
       }
       if (translationArmed) {
-        translatePage(safePage, true)
+        // priority=false so scroll/focus does not auto-clear a visible page error.
+        translatePage(safePage, false)
         // Priority: current page + next N (IMA-style look-ahead).
         for (let ahead = 1; ahead <= TRANSLATE_START_AHEAD; ahead += 1) {
           const nextPage = safePage + ahead
@@ -242,6 +246,8 @@ export function useDocumentPageTranslation({
       }
       if (!translationArmed) return
       const current = refs.pagesRef.current.find((page) => page.pageNumber === pageNumber)
+      // Do not auto-retry visible errors on scroll — user must click retry.
+      if (current?.status === 'error') return
       // Recover pages left as「正在翻译」after a cleared queue (not actually in-flight).
       if (
         (current?.status === 'translating' || current?.status === 'loading-source') &&
@@ -264,25 +270,11 @@ export function useDocumentPageTranslation({
   const translateActive = pages.some(
     (page) => page.status === 'loading-source' || page.status === 'translating',
   )
-  // Soft progress fills the gap between the probe paint and the full-doc apply
-  // so the status bar keeps moving while later pages are still arriving.
-  const [parseElapsedMs, setParseElapsedMs] = useState(0)
-  useEffect(() => {
-    if (!odlWarmRunning && !hybridBackfillRunning) {
-      setParseElapsedMs(0)
-      return
-    }
-    const startedAt = Date.now()
-    const timer = window.setInterval(() => {
-      setParseElapsedMs(Date.now() - startedAt)
-    }, 400)
-    return () => window.clearInterval(timer)
-  }, [hybridBackfillRunning, odlWarmRunning])
-
   const parseProgress = useMemo(() => {
-    const total = Math.max(totalPages, pages.length)
+    const total = Math.max(totalPages, pages.length, refs.totalPagesRef.current)
     if (total < 1) return null
     if (!parseArmed && !parsingActive && !odlWarmRunning && !hybridBackfillRunning) return null
+    // Real finished pages only — no elapsed-time soft fill.
     const completed = pages.filter(
       (page) =>
         page.status === 'parsed' ||
@@ -290,27 +282,22 @@ export function useDocumentPageTranslation({
         page.status === 'empty' ||
         page.status === 'error',
     ).length
+    const stillRunning =
+      odlWarmRunning ||
+      hybridBackfillRunning ||
+      pages.some((page) => page.status === 'parsing') ||
+      completed < total
     let percent = Math.min(100, Math.round((completed / total) * 100))
-    let reportedCompleted = completed
-    const fullDocRunning =
-      (odlWarmRunning || hybridBackfillRunning) && completed < total
-    if (fullDocRunning) {
-      // Ease toward 95% while the JVM full-doc / Hybrid run works (even at 0 pages).
-      const soft = Math.min(95, Math.max(percent, 2 + Math.floor(parseElapsedMs / 700)))
-      percent = Math.max(percent, soft)
-      reportedCompleted = Math.max(
-        completed,
-        Math.min(total - 1, Math.floor((percent / 100) * total)),
-      )
-    }
-    return { completed: reportedCompleted, total, percent }
+    // Never show 100% while the header parse icon is still spinning.
+    if (stillRunning) percent = Math.min(99, percent)
+    return { completed: Math.min(completed, total), total, percent }
   }, [
     hybridBackfillRunning,
     odlWarmRunning,
     pages,
     parseArmed,
-    parseElapsedMs,
     parsingActive,
+    refs,
     totalPages,
   ])
 
@@ -332,6 +319,7 @@ export function useDocumentPageTranslation({
     startTranslation,
     startParse,
     stopParse,
+    clearPageContents,
     stopTranslation,
     translatedText,
   }

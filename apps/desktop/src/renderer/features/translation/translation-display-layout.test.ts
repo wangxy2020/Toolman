@@ -83,4 +83,46 @@ describe('translation display layout', () => {
       ),
     ).toBeNull()
   })
+
+  it('treats "# 1. Breakdown of the Claim" as a body heading, not a paragraph', () => {
+    const blocks = buildTranslationDisplayBlocks(
+      [
+        'We refer to the transport.',
+        '# 1. Breakdown of the Claim',
+        'All amounts below are in Tanzanian shillings (TZS).',
+      ].join('\n'),
+    )
+    expect(
+      blocks.some(
+        (block) => block.type === 'heading' && block.text === '1. Breakdown of the Claim',
+      ),
+    ).toBe(true)
+    expect(
+      blocks.some(
+        (block) => block.type === 'paragraph' && block.text.includes('All amounts below'),
+      ),
+    ).toBe(true)
+  })
+
+  it('keeps 4 columns when ODL soft-wraps header cells with <br> or newlines', () => {
+    const wrapped = [
+      '1. Breakdown of the Claim',
+      '|Claim Item|Original Invoice<br>Amount (TZS)|Basis of Claim|Amount Claimed<br>(TZS)|',
+      '|---|---|---|---|',
+      '|Vehicle Standby Charges<br>(Standing Time)|33,800,000.00|Daily rate|21,509,090.91|',
+      '|Total Claim Excluding VAT| | |122,259,090.91|',
+    ].join('\n')
+    const table = reconstructTranslationTable(wrapped)
+    expect(table?.headers).toHaveLength(4)
+    expect(table?.headers[0]).toContain('Claim Item')
+    expect(table?.headers[1]).toMatch(/Original Invoice/)
+    expect(table?.headers[3]).toMatch(/Amount Claimed/)
+    expect(table?.rows).toHaveLength(2)
+
+    // Physical soft-wrap (br already expanded to newlines) must not collapse to 2 cols.
+    const physical = wrapped.replace(/<br\s*\/?>/gi, '\n')
+    const table2 = reconstructTranslationTable(physical)
+    expect(table2?.headers).toHaveLength(4)
+    expect(table2?.rows?.length).toBeGreaterThanOrEqual(1)
+  })
 })

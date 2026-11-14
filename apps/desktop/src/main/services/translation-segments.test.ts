@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { splitTranslationSegments } from './translation-segments'
+import {
+  MAX_SEGMENT_CHARS,
+  splitOversizedTableUnit,
+  splitTranslationSegments,
+} from './translation-segments'
 
 describe('splitTranslationSegments', () => {
   it('returns empty for blank input', () => {
@@ -39,7 +43,7 @@ describe('splitTranslationSegments', () => {
     const segments = splitTranslationSegments(source)
     expect(segments.length).toBeGreaterThan(1)
     for (const segment of segments) {
-      expect(segment.length).toBeLessThanOrEqual(2000)
+      expect(segment.length).toBeLessThanOrEqual(MAX_SEGMENT_CHARS)
     }
     expect(segments.join('\n\n').replace(/\n\n/g, '\n\n')).toContain(block)
   })
@@ -51,7 +55,22 @@ describe('splitTranslationSegments', () => {
     expect(segments.length).toBeGreaterThan(1)
     expect(segments.join(' ')).toBe(paragraph)
     for (const segment of segments) {
-      expect(segment.length).toBeLessThanOrEqual(2000)
+      expect(segment.length).toBeLessThanOrEqual(MAX_SEGMENT_CHARS)
+    }
+  })
+
+  it('bisects a huge HTML table by row groups', () => {
+    const rows = Array.from({ length: 80 }, (_, index) => {
+      const cell = `Cell-${index}-${'x'.repeat(40)}`
+      return `<tr><td>${cell}</td><td>${cell}</td></tr>`
+    }).join('')
+    const table = `<table><tr><th>A</th><th>B</th></tr>${rows}</table>`
+    const parts = splitOversizedTableUnit(table)
+    expect(parts.length).toBeGreaterThan(1)
+    for (const part of parts) {
+      expect(part).toContain('<table')
+      expect(part).toContain('</table>')
+      expect(part).toContain('<th>A</th>')
     }
   })
 

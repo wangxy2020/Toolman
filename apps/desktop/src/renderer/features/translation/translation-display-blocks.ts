@@ -37,10 +37,14 @@ function looksLikeTitlePageLine(line: string): boolean {
   return false
 }
 
+function normalizeHeadingText(text: string): string {
+  return text.trim().replace(/^#{1,6}\s+/, '').trim()
+}
+
 function classifyParagraph(text: string): Exclude<TranslationDisplayBlock, { type: 'table' }> {
   const trimmed = text.trim()
   if (looksLikeTranslationSectionHeading(trimmed) || looksLikeTitlePageLine(trimmed)) {
-    return { type: 'heading', text: trimmed }
+    return { type: 'heading', text: normalizeHeadingText(trimmed) }
   }
   if (looksLikeFieldLabelLine(trimmed)) return { type: 'meta', text: trimmed }
   const lines = trimmed.split('\n').filter((line) => line.trim())
@@ -65,7 +69,7 @@ function blocksFromProse(text: string): TranslationDisplayBlock[] {
     for (const line of lines) {
       if (looksLikeTranslationSectionHeading(line) && !line.includes('|')) {
         flush()
-        blocks.push({ type: 'heading', text: line.trim() })
+        blocks.push({ type: 'heading', text: normalizeHeadingText(line) })
         continue
       }
       buffer.push(line)

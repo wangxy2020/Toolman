@@ -15,6 +15,10 @@ import type {
   SaveTranslationContrastInput,
   SaveTranslationDocumentInput,
 } from './useTranslationRecords'
+import {
+  aggregateSnapshotSourceText,
+  aggregateSnapshotTargetText,
+} from './document-page-snapshots'
 import type { TranslationContrastItem, TranslationDocumentItem, TranslationDocumentPageSnapshot } from './translation-storage'
 import type { TranslationSidebarSection } from './translation-sidebar-types'
 import { useTranslationSettings } from './useTranslationSettings'
@@ -33,8 +37,14 @@ export interface TranslationPageProps {
   onSaveDocumentToNotes?: (title: string, content: string) => void
   onOpenDocumentPath: (filePath: string) => void
   onUpdateDocumentSourceText: (documentId: string, sourceText: string) => void
+  onUpdateDocumentPageSnapshots?: (
+    documentId: string,
+    pageSnapshots: TranslationDocumentPageSnapshot[],
+    extras?: { sourceText?: string; targetText?: string },
+  ) => void
   onUpdateDocumentPageRemark?: (documentId: string, pageNumber: number, text: string) => void
   onClearActiveDocument: () => void
+  onResetDocumentContent?: (documentId: string) => void
 }
 
 export function useTranslationPage({
@@ -49,8 +59,10 @@ export function useTranslationPage({
   onSaveDocumentToNotes,
   onOpenDocumentPath,
   onUpdateDocumentSourceText,
+  onUpdateDocumentPageSnapshots,
   onUpdateDocumentPageRemark,
   onClearActiveDocument,
+  onResetDocumentContent,
 }: TranslationPageProps) {
   const { t } = useI18n()
   const { settings, updateSettings } = useTranslationSettings()
@@ -100,8 +112,49 @@ export function useTranslationPage({
     },
     [],
   )
-  const handlePageSnapshotsChange = useCallback((snapshots: TranslationDocumentPageSnapshot[]) => {
-    livePageSnapshotsRef.current = snapshots
+  const snapshotsPersistTimerRef = useRef<number | null>(null)
+  const handlePageSnapshotsChange = useCallback(
+    (snapshots: TranslationDocumentPageSnapshot[]) => {
+      livePageSnapshotsRef.current = snapshots
+      if (!activeDocument?.id || !onUpdateDocumentPageSnapshots || snapshots.length === 0) return
+      // Debounce persist so parse/translate ticks do not rewrite storage every page.
+      if (snapshotsPersistTimerRef.current != null) {
+        window.clearTimeout(snapshotsPersistTimerRef.current)
+      }
+      const documentId = activeDocument.id
+      const fallbackSource = activeDocument.sourceText || ''
+      const fallbackTarget = activeDocument.targetText || ''
+      snapshotsPersistTimerRef.current = window.setTimeout(() => {
+        snapshotsPersistTimerRef.current = null
+        const sourceText =
+          aggregateSnapshotSourceText(snapshots).trim() || fallbackSource
+        const targetText =
+          aggregateSnapshotTargetText(snapshots).trim() || fallbackTarget
+        onUpdateDocumentPageSnapshots(documentId, snapshots, { sourceText, targetText })
+      }, 400)
+    },
+    [
+      activeDocument?.id,
+      activeDocument?.sourceText,
+      activeDocument?.targetText,
+      onUpdateDocumentPageSnapshots,
+    ],
+  )
+
+  const cancelSnapshotsPersist = useCallback(() => {
+    if (snapshotsPersistTimerRef.current != null) {
+      window.clearTimeout(snapshotsPersistTimerRef.current)
+      snapshotsPersistTimerRef.current = null
+    }
+    livePageSnapshotsRef.current = []
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (snapshotsPersistTimerRef.current != null) {
+        window.clearTimeout(snapshotsPersistTimerRef.current)
+      }
+    }
   }, [])
   const handlePageMetaChange = useCallback((meta: { totalPages: number; currentPage: number }) => {
     setDocumentTotalPages(meta.totalPages)
@@ -261,6 +314,8 @@ export function useTranslationPage({
     onSaveDocumentToNotes,
     onOpenDocumentPath,
     onClearActiveDocument,
+    onResetDocumentContent,
+    cancelSnapshotsPersist,
     showStatus,
     getPendingPageRemark,
   })

@@ -93,61 +93,10 @@ export async function runOdlProgressiveParse(args: {
       commitTotalPages(data.totalPages)
       if (data.odlScanDetected) skipLocalWarm = true
 
-      // Digital PDF: paint the probe immediately so page 1 is visible while the
-      // full-document run finishes, then upgrade with the final layout.
-      if (!data.odlScanDetected && batchIndex === 0 && end < total) {
-        const emptyInBatch = applyParseResults(batchPageNumbers, data.pages, {
-          emptyAsParsing: true,
-          previewLenient: true,
-        })
-        allEmptyPages.push(...emptyInBatch)
-
-        const fullTimeoutMs = Math.min(ODL_PARSE_TIMEOUT_MS, 180_000)
-        try {
-          const fullResult = await withTimeout(
-            invokeParsePages(filePath, 1, total, workspaceId, 'opendataloader', {
-              odlPreviewOnly: true,
-              fullDocument: true,
-              odlPreviewReset: true,
-              timeoutMs: fullTimeoutMs,
-            }),
-            fullTimeoutMs,
-            'OpenDataLoader 解析超时',
-          )
-          if (generation !== refs.generationRef.current) return
-          if (fullResult.ok) {
-            const fullData = TranslationDocumentParsePagesOutputSchema.parse(fullResult.data)
-            commitTotalPages(fullData.totalPages)
-            const covered = fullData.pages.filter((page) => {
-              const text = (page.text ?? page.markdown ?? '').trim()
-              return text.length > 0
-            }).length
-            if (covered >= Math.max(end + 1, Math.ceil(total * 0.5))) {
-              const allPages = Array.from(
-                { length: Math.max(total, fullData.totalPages) },
-                (_, index) => index + 1,
-              )
-              const emptyRest = await applyParseResultsInChunks(
-                allPages,
-                fullData.pages,
-                applyParseResults,
-                {
-                  emptyAsParsing: true,
-                  previewLenient: true,
-                  shouldAbort: () => generation !== refs.generationRef.current,
-                },
-              )
-              allEmptyPages.push(...emptyRest)
-              break
-            }
-          }
-        } catch {
-          // Probe already painted; continue progressive batches.
-        }
-        // Full-doc missed — probe already painted; keep progressive going.
-        continue
-      }
-
+      // Always paint each progressive batch as soon as it returns. Do not jump to a
+      // fullDocument read after the probe: the probe already seeded a 2-page cache
+      // entry, so fullDocument returned instantly with only pages 1–2, marked the
+      // rest empty, and stopped the status spinner while later pages stayed blank.
       const emptyInBatch = applyParseResults(batchPageNumbers, data.pages, {
         emptyAsParsing: true,
         previewLenient: true,
@@ -171,6 +120,9 @@ export async function runOdlProgressiveParse(args: {
             invokeParsePages(filePath, 1, total, workspaceId, 'opendataloader', {
               odlPreviewOnly: true,
               fullDocument: true,
+              // Drop the progressive partial cache so fullDocument cannot return
+              // only the probe pages and stop the parse UI early.
+              odlPreviewReset: true,
               timeoutMs: ODL_PARSE_TIMEOUT_MS,
             }),
             ODL_PARSE_TIMEOUT_MS,

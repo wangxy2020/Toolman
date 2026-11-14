@@ -19,7 +19,7 @@ export const modulesZhCN = {
     workflow: {
       title: '自动化',
       addLabel: '新建任务',
-      headerAll: '全部自动化',
+      headerAll: '自动化',
       sidebarEmptyHint: '暂无任务，点击上方新建',
       contentEmptyTitle: '自动化',
       contentEmptyHint: '在左侧新建任务与子任务，在右侧与智能体对话完成自动化。',
@@ -42,7 +42,7 @@ export const modulesZhCN = {
       contentEmptyHint: '浏览与安装 MCP、技能、工作流与知识资源，参与社区任务与留言互动。',
     },
     projects: {
-      title: '项目管理',
+      title: '项目',
       addLabel: '新建项目',
       headerAll: '全部项目',
       sidebarEmptyHint: '在左侧选择「成本管理」或「计划管理」查看看板',
@@ -61,7 +61,7 @@ export const modulesZhCN = {
       title: '课堂',
       addLabel: '开课',
       headerAll: '教学预设',
-      sidebarEmptyHint: '暂无学习会话，请选择预设开课',
+      sidebarEmptyHint: '暂无课程，点击上方添加',
       contentEmptyTitle: '课堂',
       contentEmptyHint: '苏格拉底式学习与开放工具平台。选择预设、绑定教材知识库后开课。',
     },

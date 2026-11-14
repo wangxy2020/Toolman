@@ -226,7 +226,12 @@ export function useDocumentPageBootstrap({
   useEffect(() => {
     if (!enabled || !filePath || !documentId || !savedPageSnapshots?.length) return
     if (bootstrapping) return
-    if (refs.parseArmedRef.current || refs.odlWarmRunningRef.current || refs.hybridBackfillRunningRef.current) {
+    if (
+      refs.parseArmedRef.current ||
+      refs.translationArmedRef.current ||
+      refs.odlWarmRunningRef.current ||
+      refs.hybridBackfillRunningRef.current
+    ) {
       return
     }
 

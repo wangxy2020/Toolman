@@ -99,9 +99,20 @@ export function createDocumentPageBodyLookup(
     get(pageNumber: number) {
       if (cache.has(pageNumber)) return cache.get(pageNumber) ?? undefined
       const live = pageByNumber.get(pageNumber)
-      const body =
-        (live ? pageStateToPageBody(live, documentId) : null) ??
-        snapshotToPageBody(snapshotByPage.get(pageNumber), documentId)
+      if (live) {
+        const fromLive = pageStateToPageBody(live, documentId)
+        if (fromLive) {
+          cache.set(pageNumber, fromLive)
+          return fromLive
+        }
+        // 清空 leaves idle/parsing shells before snapshots flush — do not paint
+        // stale snapshot bodies (flattened claim tables) back into the right pane.
+        if (live.status === 'idle' || live.status === 'parsing') {
+          cache.set(pageNumber, null)
+          return undefined
+        }
+      }
+      const body = snapshotToPageBody(snapshotByPage.get(pageNumber), documentId)
       cache.set(pageNumber, body)
       return body ?? undefined
     },
@@ -113,16 +124,12 @@ export function resolvePageForDisplay(
   body: DocumentPageBody | null | undefined,
   attachBody: boolean,
 ): DocumentPageState {
-  if (!attachBody) {
-    if (!page.sourceText && !page.translatedText && !page.parsedMarkdown) return page
-    return {
-      ...page,
-      sourceText: '',
-      translatedText: '',
-      parsedMarkdown: undefined,
-    }
-  }
+  // Keep live text even when the row skips rich attach — blanking off-window /
+  // mid-translate rows left spinners with no preview until stop/remount.
+  if (!attachBody) return page
   if (!body) return page
+
+  const hasLiveBody = Boolean(page.translatedText.trim() || page.parsedMarkdown?.trim())
   // Live translation / done pages must keep their own text — body.plain is often
   // empty for ODL HTML and was wiping the Chinese result from the right pane.
   if (
@@ -131,16 +138,26 @@ export function resolvePageForDisplay(
     page.status === 'loading-source' ||
     page.status === 'error'
   ) {
+    if (page.status === 'done' && page.translatedText.trim()) {
+      // Keep both Chinese and parse markdown — Card chooses by armed mode.
+      return page
+    }
+    if (hasLiveBody) {
+      return page
+    }
+    // Translating/restored shells may still need the parse body as a preview.
+    if (page.status === 'done') {
+      return page
+    }
     return {
       ...page,
-      ...(page.status === 'done' && page.translatedText.trim()
-        ? { parsedMarkdown: undefined }
-        : {}),
+      translatedText: body.plain || body.markdown,
+      parsedMarkdown: body.markdown || undefined,
     }
   }
   return {
     ...page,
-    translatedText: body.plain,
+    translatedText: body.plain || page.translatedText,
     parsedMarkdown: body.markdown,
   }
 }

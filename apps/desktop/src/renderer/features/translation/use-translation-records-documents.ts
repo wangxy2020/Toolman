@@ -8,6 +8,7 @@ import {
   uniqueTitle,
   type TranslationData,
   type TranslationDocumentItem,
+  type TranslationDocumentPageSnapshot,
 } from './translation-storage'
 import { setPageRemark } from './document-page-remarks'
 import type { SaveTranslationDocumentInput } from './use-translation-records-types'
@@ -93,6 +94,35 @@ export function useTranslationRecordsDocuments(options: Options) {
     setActiveDocumentId(null)
     setRenameDocumentId(null)
   }, [setActiveDocumentId, setRenameDocumentId])
+
+  /** Wipe parse/translate bodies so the next open of the same file starts fresh. */
+  const resetDocumentContent = useCallback(
+    (documentId: string) => {
+      if (!workspaceId || !documentId) return
+      setData((prev) => {
+        const existing = prev.documents.find((item) => item.id === documentId)
+        if (!existing) return prev
+        return {
+          ...prev,
+          documents: prev.documents.map((item) =>
+            item.id === documentId
+              ? normalizeDocument(
+                  {
+                    ...item,
+                    sourceText: '',
+                    targetText: '',
+                    pageSnapshots: [],
+                    updatedAt: Date.now(),
+                  },
+                  workspaceId,
+                )
+              : item,
+          ),
+        }
+      })
+    },
+    [setData, workspaceId],
+  )
 
   const enterDocumentsSection = useCallback(() => {
     setRenameContrastId(null)
@@ -199,6 +229,45 @@ export function useTranslationRecordsDocuments(options: Options) {
     [setData, workspaceId],
   )
 
+  const updateDocumentPageSnapshots = useCallback(
+    (
+      documentId: string,
+      pageSnapshots: TranslationDocumentPageSnapshot[],
+      extras?: { sourceText?: string; targetText?: string },
+    ): void => {
+      if (!workspaceId || pageSnapshots.length === 0) return
+      setData((prev) => {
+        const existing = prev.documents.find((item) => item.id === documentId)
+        if (!existing) return prev
+        const sameSnapshots =
+          JSON.stringify(existing.pageSnapshots ?? null) === JSON.stringify(pageSnapshots)
+        const sameSource =
+          extras?.sourceText === undefined || extras.sourceText === existing.sourceText
+        const sameTarget =
+          extras?.targetText === undefined || extras.targetText === existing.targetText
+        if (sameSnapshots && sameSource && sameTarget) return prev
+        return {
+          ...prev,
+          documents: prev.documents.map((item) =>
+            item.id === documentId
+              ? normalizeDocument(
+                  {
+                    ...item,
+                    pageSnapshots,
+                    ...(extras?.sourceText !== undefined ? { sourceText: extras.sourceText } : {}),
+                    ...(extras?.targetText !== undefined ? { targetText: extras.targetText } : {}),
+                    updatedAt: Date.now(),
+                  },
+                  workspaceId,
+                )
+              : item,
+          ),
+        }
+      })
+    },
+    [setData, workspaceId],
+  )
+
   const updateDocumentPageRemark = useCallback(
     (documentId: string, pageNumber: number, text: string): void => {
       if (!workspaceId) return
@@ -239,12 +308,14 @@ export function useTranslationRecordsDocuments(options: Options) {
     openDocument,
     selectDocument,
     clearActiveDocument,
+    resetDocumentContent,
     enterDocumentsSection,
     startRenameDocument,
     cancelRenameDocument,
     renameDocument,
     saveDocument,
     updateDocumentSourceText,
+    updateDocumentPageSnapshots,
     updateDocumentPageRemark,
     deleteDocument,
   }

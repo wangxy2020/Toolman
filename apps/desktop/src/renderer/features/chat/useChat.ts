@@ -79,6 +79,15 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
 
   handleSelectSessionRef.current = handleSelectSession
 
+  const handleClearActiveSession = useCallback(async () => {
+    const prev = session.activeSessionId
+    if (prev) await messagesState.abortSessionStreaming(prev)
+    session.clearActiveSession()
+    messagesState.setMessages([])
+    sendState.setSending(false)
+    setCombinedError(null)
+  }, [session, messagesState, sendState, setCombinedError])
+
   const handleCreateSession = useCallback(
     async (assistantId?: string) => {
       const prev = session.activeSessionId
@@ -178,6 +187,7 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
     setError: setCombinedError,
     createSession: handleCreateSession,
     selectSession: handleSelectSession,
+    clearActiveSession: handleClearActiveSession,
     renameSession: session.renameSession,
     deleteSession: handleDeleteSession,
     deleteAssistant,

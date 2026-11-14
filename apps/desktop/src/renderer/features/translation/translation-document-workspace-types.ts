@@ -30,6 +30,8 @@ export interface TranslationDocumentWorkspaceHandle {
   startParse: () => boolean
   stopTranslation: () => void
   stopParse: () => void
+  /** Wipe parse/translate bodies; keep PDF page slots. */
+  clearPageContents: () => void
   getPageSnapshots: () => TranslationDocumentPageSnapshot[]
 }
 

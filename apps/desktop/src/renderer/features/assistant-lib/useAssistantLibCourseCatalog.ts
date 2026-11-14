@@ -140,13 +140,11 @@ export function useAssistantLibCourseCatalog(
   )
 
   useEffect(() => {
-    if (!workspaceId || !kbIdsKey) {
-      setOutlineByKbId({})
-      setErrorsByKbId({})
-      return
-    }
+    // Keep prior outlines when the course list is briefly empty (module switch / reload)
+    // so the sidebar does not flash empty → loading → chapters.
+    if (!workspaceId || !kbIdsKey) return
     for (const kbId of kbIdsKey.split('|').filter(Boolean)) {
-      void loadOutline(kbId, true)
+      void loadOutline(kbId, false)
     }
   }, [kbIdsKey, loadOutline, workspaceId])
 

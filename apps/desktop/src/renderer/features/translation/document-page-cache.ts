@@ -1,4 +1,5 @@
 import type { TranslationLanguage } from '@toolman/shared'
+import { resolveParseDisplayContent } from './document-page-parse-display'
 import type { DocumentPageState, DocumentPageStatus } from './useDocumentPageTranslation'
 import {
   isPdfPageMarkerOnly,
@@ -66,7 +67,8 @@ function isPageImageKeyPinned(key: string): boolean {
 }
 
 export function parsePageCacheKey(documentId: string, pageNumber: number): string {
-  return `${documentId}::parse:v5::${pageNumber}`
+  // v7: parse uses translate block layout (plain+pipes), not GFM→HTML.
+  return `${documentId}::parse:v7::${pageNumber}`
 }
 
 export function sourceTextCacheKey(filePath: string, pageNumber: number): string {
@@ -209,6 +211,31 @@ export function getPageImageInflight(key: string): Promise<string> | null {
   return previewImageInflight.get(key) ?? null
 }
 
+/** Drop in-memory parse/translate text caches for one document (清空 / reopen fresh). */
+export function clearDocumentPageTextCaches(documentId: string): void {
+  if (!documentId) return
+  const parsePrefix = `${documentId}::parse:`
+  for (const key of [...parsePageCache.keys()]) {
+    if (key.startsWith(parsePrefix) || key.startsWith(`${documentId}::`)) {
+      parsePageCache.delete(key)
+    }
+  }
+  for (const key of [...pageTextCache.keys()]) {
+    if (key.startsWith(`${documentId}::`)) {
+      pageTextCache.delete(key)
+    }
+  }
+}
+
+/** Drop cached plain source text for one PDF path so re-parse cannot reuse stale bodies. */
+export function clearSourceTextCacheForFile(filePath: string): void {
+  if (!filePath) return
+  const prefix = `${filePath}::`
+  for (const key of [...sourceTextCache.keys()]) {
+    if (key.startsWith(prefix)) sourceTextCache.delete(key)
+  }
+}
+
 export function clearPageImageCache(): void {
   for (const url of pageImageCache.values()) revokePageImageUrl(url)
   pageImageCache.clear()
@@ -269,9 +296,15 @@ export function hydratePagesFromCache(options: {
         cachedParse.translatedText,
         cachedParse.parsedMarkdown,
       )
+      const { displayPlain, displayMarkdown } = resolveParseDisplayContent(
+        sanitized.text,
+        sanitized.markdown,
+        cachedParse.translatedText,
+        cachedParse.parsedMarkdown ?? cachedParse.translatedText,
+      )
       const hasContent =
-        (sanitized.markdown.trim() && !isPdfPageMarkerOnly(sanitized.markdown)) ||
-        (sanitized.text.trim() && !isPdfPageMarkerOnly(sanitized.text))
+        (displayMarkdown.trim() && !isPdfPageMarkerOnly(displayMarkdown)) ||
+        (displayPlain.trim() && !isPdfPageMarkerOnly(displayPlain))
       if (!hasContent) {
         return {
           pageNumber,
@@ -283,8 +316,8 @@ export function hydratePagesFromCache(options: {
       return {
         pageNumber,
         sourceText: sourceText.trim() ? sourceText : '',
-        translatedText: sanitized.text,
-        parsedMarkdown: sanitized.markdown,
+        translatedText: displayPlain,
+        parsedMarkdown: displayMarkdown,
         status: 'parsed' as const,
       }
     }

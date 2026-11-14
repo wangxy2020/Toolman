@@ -5,6 +5,7 @@ import {
   assistantLibSessionMetadataPatch,
   formatSyllabusMarkdown,
   IpcChannel,
+  isAssistantLibAssistantName,
   parseAssistantLibSessionMeta,
   parseSocraticState,
   touchLatestClassroomStudyRecord,
@@ -15,6 +16,7 @@ import { ChatComposer } from '../chat/ChatComposer'
 import { getMessageText, getUserFacingMessageText } from '../chat/message-utils'
 import type { ChatPageState } from '../chat/useChatPage'
 import { useI18n } from '../../i18n/useI18n'
+import { isClassroomOwnedSession } from './classroom-session-binding'
 
 function socraticStateSignature(state: SocraticState): string {
   return JSON.stringify({
@@ -71,6 +73,10 @@ export function AssistantLibChatPanel(props: Props) {
   const { t } = useI18n()
   const { chat, updateAppSettings, notes } = props
 
+  const classroomAssistantId =
+    chat.assistants.find((item) => isAssistantLibAssistantName(item.name))?.id ?? null
+  const onClassroomSession = isClassroomOwnedSession(chat.activeSession, classroomAssistantId)
+
   const activeAssistant = useMemo(() => {
     const assistantId = chat.activeSession?.assistantId
     if (!assistantId) return null
@@ -78,6 +84,7 @@ export function AssistantLibChatPanel(props: Props) {
   }, [chat.activeSession?.assistantId, chat.assistants])
 
   useEffect(() => {
+    if (!onClassroomSession) return
     const assistantId = activeAssistant?.id
     if (!assistantId || !activeAssistant?.parameters.kbIds?.length) return
     const byAssistant = props.appSettings.kbEnabledByAssistantId ?? {}
@@ -89,7 +96,12 @@ export function AssistantLibChatPanel(props: Props) {
         [assistantId]: true,
       },
     })
-  }, [activeAssistant, props.appSettings.kbEnabledByAssistantId, updateAppSettings])
+  }, [
+    activeAssistant,
+    onClassroomSession,
+    props.appSettings.kbEnabledByAssistantId,
+    updateAppSettings,
+  ])
 
   const latestAssistant = useMemo(() => {
     return [...chat.messages].reverse().find((message) => message.role === 'assistant') ?? null
@@ -102,7 +114,9 @@ export function AssistantLibChatPanel(props: Props) {
 
   useEffect(() => {
     const session = chat.activeSession
-    if (!session || !latestAssistant || latestAssistant.status !== 'completed') return
+    if (!onClassroomSession || !session || !latestAssistant || latestAssistant.status !== 'completed') {
+      return
+    }
     if (persistInFlight.current) return
     // Keep machine fences in the raw message for parsing; do not surface them in chat UI.
     const text = getMessageText(latestAssistant)
@@ -146,17 +160,12 @@ export function AssistantLibChatPanel(props: Props) {
     chat.activeSession,
     chat.loadSessions,
     latestAssistant,
+    onClassroomSession,
     understanding,
   ])
 
-  if (!chat.activeSession) {
-    return (
-      <div className="tm-kb-file-panel-empty tm-pm-agent-panel-empty">
-        <p>{t('assistantLibPage.selectPresetHint')}</p>
-      </div>
-    )
-  }
-
+  // Always show the agent chat pane (blank when no course), matching 自动化 with no tasks.
+  // Foreign sessions are rebound by ensureActiveClassroomChatSession on page mount.
   return (
     <>
       {chat.error ? (
@@ -169,7 +178,11 @@ export function AssistantLibChatPanel(props: Props) {
       ) : null}
       <ChatComposer
         chat={chat}
-        activeAssistantName={activeAssistant?.name ?? t('assistantLibPage.title')}
+        activeAssistantName={
+          onClassroomSession
+            ? (activeAssistant?.name ?? t('assistantLibPage.title'))
+            : t('assistantLibPage.title')
+        }
         defaultModelId={props.defaultModelId}
         translationLanguages={props.translationLanguages}
         messageSettings={props.messageSettings}
@@ -182,6 +195,7 @@ export function AssistantLibChatPanel(props: Props) {
         onEditUserMessage={props.handleEditUserMessage}
         onPrefillConsumed={props.handlePrefillConsumed}
         onUpdateAppSettings={updateAppSettings}
+        onCreateSession={() => void chat.createSession(classroomAssistantId ?? undefined)}
         onClearSession={() => void chat.clearSessionMessages()}
         onSaveToNote={(messageId) => {
           const message = chat.messages.find((item) => item.id === messageId)

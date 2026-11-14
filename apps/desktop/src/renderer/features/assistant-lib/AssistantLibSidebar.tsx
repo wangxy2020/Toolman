@@ -121,7 +121,7 @@ export function AssistantLibSidebar({
 
         <div className="tm-sidebar-list">
           {orderedSessions.length === 0 ? (
-            <div className="tm-alib-sidebar-empty">{t('assistantLibPage.emptySessions')}</div>
+            <div className="tm-session-empty">{t('assistantLibPage.emptySessions')}</div>
           ) : (
             orderedSessions.map((session) => {
               const isActive = session.id === activeSessionId
@@ -212,9 +212,9 @@ export function AssistantLibSidebar({
                   </div>
 
                   {isOpen ? (
-                    loading ? (
+                    loading && chapters.length === 0 ? (
                       <div className="tm-session-empty">{t('common.loading')}</div>
-                    ) : loadError ? (
+                    ) : loadError && chapters.length === 0 ? (
                       <div className="tm-session-empty">{loadError}</div>
                     ) : chapters.length === 0 ? (
                       <div className="tm-session-empty">

@@ -24,8 +24,21 @@ const ROMAN_LIST_MARKER_RE =
  * matches OCR section titles like "3 DISCUSSION" (2+ consecutive caps / CJK),
  * not date wraps like "5 September 2026".
  */
+const OUTLINE_STARTER_CHARS = String.raw`[A-Z(\u3400-\u9fff"“]`
+const ROMAN_LOWER_RE = '(?:xiv|xv|xiii|xii|viii|vii|iii|ii|iv|ix|vi|xi|x|v|i)'
+/** Nested outline markers: `1.1 Text`, `1.1.1 Text`, `(a) text`, `(ii) text`, `i. text`, `a. Text`. */
+const NESTED_OUTLINE_START_SRC = [
+  String.raw`\d{1,2}(?:\.\d{1,2}){1,4}\.?\s+(?=${OUTLINE_STARTER_CHARS})`,
+  String.raw`[（(](?:\d{1,2}|[a-z]|[A-Z]|[ivxlc]{1,6})[）)]\s*(?=\S)`,
+  String.raw`${ROMAN_LOWER_RE}[.)]\s+(?=[a-z])`,
+  String.raw`[a-z]\.\s+(?=${OUTLINE_STARTER_CHARS})`,
+].join('|')
+/** Marker-only line (`1.1`, `(a)`, `ii.`) — text follows on the next line. */
+const NESTED_OUTLINE_MARKER_ONLY_RE = new RegExp(
+  String.raw`^(?:\d{1,2}(?:\.\d{1,2}){1,4}\.?|[（(](?:\d{1,2}|[a-zA-Z]|[ivxlc]{1,6})[）)]|${ROMAN_LOWER_RE}[.)]|[a-z][.)])$`,
+)
 const LIST_OR_HEADING_RE = new RegExp(
-  String.raw`^\s*(?:#{1,6}\s|\d{1,2}[.、．)]\s+|\d{1,2}\s+(?=[A-Z]{2,}|[\u3400-\u9fff])|[a-zA-Z]\)\s|[-*+]\s|[（(]\d+[）)]\s|${ROMAN_LIST_MARKER_RE.source})`,
+  String.raw`^\s*(?:#{1,6}\s|\d{1,2}[.、．)]\s+|\d{1,2}\s+(?=[A-Z]{2,}|[\u3400-\u9fff])|[a-zA-Z]\)\s|[-*+]\s|[（(]\d+[）)]\s|${NESTED_OUTLINE_START_SRC}|${ROMAN_LIST_MARKER_RE.source})`,
 )
 const LETTER_META_RE =
   /^(?:dear|yours|sincerely|faithfully|regards|to:|from:|date:|ref:|subject:|attn)\b|^(?:尊敬的|此致|敬礼|收件|发件|日期|编号|事由|主题|抄送|地址|电话|手机|传真|邮编|邮件|邮箱)/i
@@ -66,6 +79,11 @@ function looksLikeHeadingOrList(line: string): boolean {
   if (!trimmed) return false
   if (ROMAN_LIST_MARKER_RE.test(trimmed)) return true
   return LIST_OR_HEADING_RE.test(trimmed)
+}
+
+/** A marker-only line (`1.1`, `(a)`) starts a new outline row — never glue it onto the previous line. */
+function startsOutlineRow(line: string): boolean {
+  return looksLikeHeadingOrList(line) || NESTED_OUTLINE_MARKER_ONLY_RE.test(line.trim())
 }
 
 function looksLikeLabelLine(line: string): boolean {
@@ -112,7 +130,8 @@ function shouldKeepCjkLinesSeparate(previous: string, next: string): boolean {
 }
 
 export function looksLikeTranslationSectionHeading(line: string): boolean {
-  const trimmed = line.trim()
+  // Strip markdown ATX markers so "# 1. Breakdown of the Claim" counts as a body heading.
+  const trimmed = line.trim().replace(/^#{1,6}\s+/, '')
   if (!trimmed || /[。！？]/.test(trimmed) || /\.\s*$/.test(trimmed)) return false
   return SECTION_HEADING_RE.test(trimmed) && displayLineLength(trimmed) <= 90
 }
@@ -145,7 +164,14 @@ export function unpackTranslationLayoutHints(text: string): string {
       '$1\n$2',
     )
     // OCR-lossy "1 Power of Attorney" / "3 DISCUSSION" section starts mid-stream.
-    .replace(/([.!?。！？])\s*(\d{1,2}\s+)(?=[A-Z][A-Za-z]{2,})/g, '$1\n$2')
+    // `(?<!\d)`: the dot in outline numbers like "1.1 The…" is not a sentence end.
+    .replace(/(?<!\d)([.!?。！？])\s*(\d{1,2}\s+)(?=[A-Z][A-Za-z]{2,})/g, '$1\n$2')
+    // Glued nested outline markers: "… Works. 1.1 The …", "…; (a) design".
+    .replace(
+      /([.!?;；:。！？])\s+(\d{1,2}(?:\.\d{1,2}){1,4}\.?\s+)(?=[A-Z(\u3400-\u9fff])/g,
+      '$1\n$2',
+    )
+    .replace(/([.!?;；:。！？])\s+([（(](?:[a-z]|[ivxlc]{1,6}|\d{1,2})[）)]\s+)(?=[A-Za-z])/g, '$1\n$2')
     .replace(
       /(^|\n)(\d+[\.、．]\s+[^\n。]{2,48}?)(?=(?:所有金额|根据|我方|现将|All amounts|The total|We ))/g,
       '$1$2\n',
@@ -183,7 +209,7 @@ function looksLikeTitlePageToken(line: string): boolean {
 function shouldJoinFragmentedLines(previous: string, next: string): boolean {
   if (!previous.trim() || !next.trim()) return false
   if (
-    looksLikeHeadingOrList(next) ||
+    startsOutlineRow(next) ||
     looksLikeTranslationSectionHeading(next) ||
     looksLikeLetterMetaLine(next) ||
     looksLikeContactLine(next) ||
@@ -218,7 +244,7 @@ function shouldJoinTranslationLines(
   if (!previous.trim() || !next.trim()) return false
   if (fragmented) return shouldJoinFragmentedLines(previous, next)
   if (
-    looksLikeHeadingOrList(next) ||
+    startsOutlineRow(next) ||
     looksLikeTranslationSectionHeading(next) ||
     looksLikeLetterMetaLine(next) ||
     looksLikeContactLine(next) ||
@@ -261,7 +287,7 @@ function shouldBreakParagraph(previous: string, next: string): boolean {
     return true
   }
   // Roman / numbered list items must become their own display paragraphs.
-  if (looksLikeHeadingOrList(next)) return true
+  if (startsOutlineRow(next)) return true
   if (isFieldLabelLine(next)) return true
   if (
     looksLikeNewParagraphStart(next) &&

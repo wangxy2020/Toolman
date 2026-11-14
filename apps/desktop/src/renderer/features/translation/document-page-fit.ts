@@ -222,20 +222,65 @@ export function writeDocumentPageFitMarkdown(body: string, fit: DocumentPageFitR
 }
 
 /**
- * Window resize must not rewrite 字号. Scaling by page-box height made maximize
- * (and intermediate layout frames) shrink readable type on some pages.
- * Typography stays put; overflow scrolls inside the card.
+ * Derive 字号 caps from pane width so small windows stay compact and wide
+ * windows stay readable (fixed 12–15px looked huge in a narrow column and tiny
+ * after maximize).
+ */
+export function resolveDocumentPageFitCapsForWidth(
+  boxWidth: number,
+  base: DocumentPageFitCaps = DOCUMENT_PAGE_FIT_PROSE_CAPS,
+): DocumentPageFitCaps {
+  const width = Math.max(160, boxWidth || 520)
+  // 280px → compact; 520px → base; 760px+ → slightly larger.
+  const t = Math.max(0, Math.min(1, (width - 280) / 480))
+  const fontMax = round1(base.fontMax - 3 + t * 5) // prose: 12→17 around base 15
+  const fontMin = round1(base.fontMin - 2 + t * 3) // prose: 10→13 around base 12
+  return {
+    fontMax: Math.max(fontMin + 1, fontMax),
+    fontMin: Math.max(9, Math.min(fontMin, fontMax - 1)),
+    lineMax: base.lineMax,
+    lineMin: base.lineMin,
+    padMax: Math.max(base.padMin, Math.round(base.padMax - 4 + t * 6)),
+    padMin: Math.max(4, Math.round(base.padMin - 2 + t * 3)),
+  }
+}
+
+/** True when the pane width changed enough that 字号 should be remeasured. */
+export function shouldRemeasureDocumentPageFitForWidth(
+  previousWidth: number,
+  nextWidth: number,
+): boolean {
+  if (previousWidth < 1 || nextWidth < 1) return true
+  return Math.abs(nextWidth - previousWidth) >= 48
+}
+
+/**
+ * On small width changes keep type; on larger width jumps, clamp into the
+ * width-aware caps so maximize/minimize rebalance without a full remount.
  */
 export function scaleDocumentPageFitForBox(
   saved: DocumentPageFitRecord,
-  _boxWidth: number,
+  boxWidth: number,
   _boxHeight: number,
   caps: DocumentPageFitCaps = DOCUMENT_PAGE_FIT_PROSE_CAPS,
 ): DocumentPageFitStyle {
+  const widthCaps = resolveDocumentPageFitCapsForWidth(boxWidth, caps)
+  if (!shouldRemeasureDocumentPageFitForWidth(saved.boxWidth, boxWidth)) {
+    return {
+      fontSize: Math.max(widthCaps.fontMin, Math.min(widthCaps.fontMax, round1(saved.fontSize))),
+      lineHeight: saved.lineHeight,
+      padding: Math.max(widthCaps.padMin, Math.min(widthCaps.padMax, Math.round(saved.padding))),
+      scale: saved.scale >= DOCUMENT_FIT_SCALE_MIN ? Math.min(1, saved.scale) : 1,
+    }
+  }
+  // Width jumped — scale previous 字号 by the pane width ratio, then clamp.
+  const ratio =
+    saved.boxWidth > 1 ? Math.max(0.72, Math.min(1.35, boxWidth / saved.boxWidth)) : 1
+  const nextFont = round1(saved.fontSize * ratio)
   return {
-    fontSize: Math.max(caps.fontMin, Math.min(caps.fontMax, round1(saved.fontSize))),
+    fontSize: Math.max(widthCaps.fontMin, Math.min(widthCaps.fontMax, nextFont)),
     lineHeight: saved.lineHeight,
-    padding: Math.max(caps.padMin, Math.min(caps.padMax, Math.round(saved.padding))),
-    scale: saved.scale >= DOCUMENT_FIT_SCALE_MIN ? Math.min(1, saved.scale) : 1,
+    padding: Math.max(widthCaps.padMin, Math.min(widthCaps.padMax, Math.round(saved.padding))),
+    scale: 1,
   }
 }

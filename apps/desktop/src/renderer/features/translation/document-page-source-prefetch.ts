@@ -212,17 +212,30 @@ export function useDocumentPageSourcePrefetch({
         }
         const cachedAfterBatch = getCachedSourceText(filePath, pageNumber)?.trim()
         if (cachedAfterBatch && !isTranslationPageSourceInsufficient(cachedAfterBatch)) {
-          updatePage(pageNumber, {
-            sourceText: cachedAfterBatch,
-            status: 'idle',
-            error: undefined,
-          })
+          const live = refs.pagesRef.current.find((page) => page.pageNumber === pageNumber)
+          const keepStatus =
+            live?.status === 'translating' ||
+            live?.status === 'loading-source' ||
+            live?.status === 'done' ||
+            refs.translationArmedRef.current
+          updatePage(
+            pageNumber,
+            keepStatus
+              ? { sourceText: cachedAfterBatch, error: undefined }
+              : { sourceText: cachedAfterBatch, status: 'idle', error: undefined },
+          )
           scheduleSourcePrefetch(pageNumber, generation)
           return cachedAfterBatch
         }
       }
 
-      updatePage(pageNumber, { status: 'loading-source', error: undefined })
+      const beforeLoad = refs.pagesRef.current.find((page) => page.pageNumber === pageNumber)
+      if (
+        beforeLoad?.status !== 'translating' &&
+        beforeLoad?.status !== 'done'
+      ) {
+        updatePage(pageNumber, { status: 'loading-source', error: undefined })
+      }
       try {
         await withTimeout(
           fetchPageSourcesBatch(pageNumber, pageNumber, generation),
@@ -240,11 +253,18 @@ export function useDocumentPageSourcePrefetch({
         if (text && !insufficient) {
           setCachedSourceText(filePath, pageNumber, text)
         }
-        const busy = refs.translationArmedRef.current
+        const keepBusy =
+          resolved?.status === 'translating' ||
+          resolved?.status === 'loading-source' ||
+          resolved?.status === 'done' ||
+          refs.translationArmedRef.current
         updatePage(pageNumber, {
           sourceText: insufficient ? '' : text,
-          status: insufficient ? 'empty' : busy ? 'loading-source' : 'idle',
-          error: !text ? 'empty' : insufficient ? NO_VALID_PAGE_TEXT : undefined,
+          ...(insufficient
+            ? { status: 'empty' as const, error: !text ? 'empty' : NO_VALID_PAGE_TEXT }
+            : keepBusy
+              ? { error: undefined }
+              : { status: 'idle' as const, error: undefined }),
         })
         scheduleSourcePrefetch(pageNumber, generation)
         return insufficient ? '' : text

@@ -12,6 +12,7 @@ import {
   isNegligibleDocumentFitBoxChange,
   isSameDocumentPageFit,
   resolveDocumentPageFit,
+  resolveDocumentPageFitCapsForWidth,
   resolveDocumentPageFitScale,
   scaleDocumentPageFitForBox,
   splitDocumentPageFitMarkdown,
@@ -48,6 +49,15 @@ describe('document page fit', () => {
     const tighter = tightenDocumentPageFit(current, 1100, 800)
     expect(tighter.fontSize).toBeLessThanOrEqual(current.fontSize)
     expect(tighter.lineHeight).toBeLessThanOrEqual(current.lineHeight)
+  })
+
+  it('uses smaller 字号 caps in a narrow pane and larger caps when wide', () => {
+    const narrow = resolveDocumentPageFitCapsForWidth(280)
+    const wide = resolveDocumentPageFitCapsForWidth(760)
+    expect(narrow.fontMax).toBeLessThan(wide.fontMax)
+    expect(narrow.fontMin).toBeLessThanOrEqual(wide.fontMin)
+    expect(narrow.fontMax).toBeLessThan(DOCUMENT_FIT_FONT_MAX)
+    expect(wide.fontMax).toBeGreaterThan(DOCUMENT_FIT_FONT_MAX)
   })
 
   it('caps parsed tables at 12px so a full grid can still fit the page', () => {
@@ -100,7 +110,7 @@ describe('document page fit', () => {
     })
   })
 
-  it('keeps 字号 stable when the window page box changes', () => {
+  it('scales 字号 up when the pane becomes much wider', () => {
     const scaled = scaleDocumentPageFitForBox(
       {
         fontSize: 13,
@@ -113,9 +123,26 @@ describe('document page fit', () => {
       800,
       1200,
     )
-    expect(scaled.fontSize).toBe(13)
+    expect(scaled.fontSize).toBeGreaterThan(13)
+    expect(scaled.fontSize).toBeLessThanOrEqual(DOCUMENT_FIT_FONT_MAX + 2)
     expect(scaled.lineHeight).toBe(1.4)
     expect(scaled.scale).toBe(1)
+  })
+
+  it('keeps 字号 when the pane width only wobbles slightly', () => {
+    const scaled = scaleDocumentPageFitForBox(
+      {
+        fontSize: 13,
+        lineHeight: 1.4,
+        padding: 10,
+        scale: 1,
+        boxWidth: 400,
+        boxHeight: 600,
+      },
+      430,
+      610,
+    )
+    expect(scaled.fontSize).toBe(13)
   })
 
   it('ignores sub-pixel page-box noise so fit does not loop', () => {
