@@ -46,9 +46,9 @@ describe('document-page-preview-policy', () => {
     ).toBe(false)
   })
 
-  it('prefetches only one page ahead to keep scan rasters off the main-process queue', () => {
+  it('prefetches one ahead and one behind so flips stay warm without flooding the queue', () => {
     expect(PDF_PREVIEW_PREFETCH_AHEAD).toBe(1)
-    expect(PDF_PREVIEW_PREFETCH_BEHIND).toBe(0)
+    expect(PDF_PREVIEW_PREFETCH_BEHIND).toBe(1)
     expect(
       resolvePdfPreviewFetchPages({
         currentPage: 4,
@@ -59,6 +59,7 @@ describe('document-page-preview-policy', () => {
     ).toEqual([
       { pageNumber: 4, priority: 'visible' },
       { pageNumber: 5, priority: 'prefetch' },
+      { pageNumber: 3, priority: 'prefetch' },
     ])
   })
 
@@ -79,7 +80,7 @@ describe('document-page-preview-policy', () => {
         direction: 1,
         extent: 'far',
       }).map((item) => item.pageNumber),
-    ).toEqual([10, 11])
+    ).toEqual([10, 11, 9])
     expect(
       resolvePdfPreviewFetchPages({
         currentPage: 10,
@@ -88,7 +89,7 @@ describe('document-page-preview-policy', () => {
         direction: -1,
         extent: 'near',
       }).map((item) => item.pageNumber),
-    ).toEqual([10, 9])
+    ).toEqual([10, 9, 11])
   })
 
   it('activates the previous neighbor when scrolling up', () => {

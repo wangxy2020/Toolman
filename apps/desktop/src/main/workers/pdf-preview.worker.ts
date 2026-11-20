@@ -33,7 +33,8 @@ export type PdfPreviewWorkerResponse =
       ok: true
       totalPages: number
       pageNumber: number
-      base64: string
+      /** Raw JPEG/PNG bytes — never base64 (IPC + durable cache stay binary). */
+      jpeg: Buffer
       mimeType: 'image/png' | 'image/jpeg'
       width: number
       height: number
@@ -70,18 +71,24 @@ parentPort.on('message', (message: PdfPreviewWorkerRequest) => {
         message.targetWidth,
         { priority: message.priority },
       )
+      const jpeg = Buffer.from(rendered.png)
       const response: PdfPreviewWorkerResponse = {
         type: 'render-result',
         id: message.id,
         ok: true,
         totalPages: rendered.totalPages,
         pageNumber: rendered.pageNumber,
-        base64: rendered.png.toString('base64'),
+        jpeg,
         mimeType: rendered.mimeType,
         width: rendered.width,
         height: rendered.height,
       }
-      port.postMessage(response)
+      // Transfer the underlying ArrayBuffer when we own a tight copy.
+      const transfer =
+        jpeg.byteOffset === 0 && jpeg.byteLength === jpeg.buffer.byteLength
+          ? [jpeg.buffer]
+          : []
+      port.postMessage(response, transfer)
     } catch (error) {
       const aborted =
         error instanceof Error &&

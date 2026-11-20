@@ -81,17 +81,44 @@ export function resolveMeasuredRowHeight(
   return Math.max(1, fallbackHeight)
 }
 
+/**
+ * Map scroll position → focused page.
+ * Uses a focus line inside the viewport (not only the top edge) and pins to the
+ * last page near max scroll — otherwise a short final page stays soft forever
+ * because sharp upgrades still target N-1 while the user is looking at N.
+ */
 export function pageFromMeasuredScrollTop(
   scrollTop: number,
   totalPages: number,
   getRowHeight: (pageNumber: number) => number,
+  viewportHeight = 0,
 ): number {
   const total = Math.max(1, Math.floor(totalPages) || 1)
-  let offset = 0
-  const y = Math.max(0, scrollTop)
+  const heights: number[] = []
+  let contentHeight = 0
   for (let page = 1; page <= total; page += 1) {
     const height = Math.max(1, getRowHeight(page))
-    if (y < offset + height) return page
+    heights.push(height)
+    contentHeight += height
+  }
+
+  const yTop = Math.max(0, scrollTop)
+  const viewport = Math.max(0, Math.floor(viewportHeight) || 0)
+
+  if (viewport > 0 && contentHeight > viewport) {
+    const maxScroll = contentHeight - viewport
+    if (yTop >= maxScroll - 4) return total
+  }
+
+  const focusY =
+    viewport > 0
+      ? yTop + Math.min(viewport * 0.45, Math.max(120, viewport * 0.35))
+      : yTop
+
+  let offset = 0
+  for (let index = 0; index < total; index += 1) {
+    const height = heights[index]!
+    if (focusY < offset + height) return index + 1
     offset += height
   }
   return total

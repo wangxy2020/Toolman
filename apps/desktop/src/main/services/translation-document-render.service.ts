@@ -23,7 +23,7 @@ export async function renderTranslationDocumentPage(input: unknown) {
       TranslationDocumentRenderPageOutputSchema.parse({
         totalPages: rendered.totalPages,
         pageNumber: rendered.pageNumber,
-        base64: rendered.base64,
+        bytes: rendered.jpeg,
         mimeType: rendered.mimeType,
         width: rendered.width,
         height: rendered.height,

@@ -14,7 +14,7 @@ import type {
 export type PdfPreviewRenderResult = {
   totalPages: number
   pageNumber: number
-  base64: string
+  jpeg: Buffer
   mimeType: 'image/png' | 'image/jpeg'
   width: number
   height: number
@@ -36,6 +36,10 @@ let workerFailed = false
 let nextRequestId = 1
 let lastFastPaintPage = 0
 const pending = new Map<number, PendingJob>()
+
+function toJpegBuffer(value: Buffer | Uint8Array): Buffer {
+  return Buffer.isBuffer(value) ? value : Buffer.from(value)
+}
 
 function rejectAllPending(error: Error) {
   for (const [, job] of pending) job.reject(error)
@@ -72,12 +76,13 @@ function ensureWorker(): Worker | null {
     if (!job) return
     pending.delete(response.id)
     if (response.ok) {
+      const jpeg = toJpegBuffer(response.jpeg)
       // Always cache finished JPEGs — even when the caller was dropped — so
       // flip-back / prefetch reuse does not re-raster a scan page.
       try {
         const mtimeMs = statSync(job.filePath).mtimeMs
         setDurablePdfPreviewJpeg(job.filePath, mtimeMs, response.pageNumber, job.targetWidth, {
-          jpeg: Buffer.from(response.base64, 'base64'),
+          jpeg,
           mimeType: 'image/jpeg',
           width: response.width,
           height: response.height,
@@ -90,7 +95,7 @@ function ensureWorker(): Worker | null {
       job.resolve({
         totalPages: response.totalPages,
         pageNumber: response.pageNumber,
-        base64: response.base64,
+        jpeg,
         mimeType: response.mimeType,
         width: response.width,
         height: response.height,
@@ -161,7 +166,7 @@ async function renderInProcess(
   return {
     totalPages: rendered.totalPages,
     pageNumber: rendered.pageNumber,
-    base64: rendered.png.toString('base64'),
+    jpeg: rendered.png,
     mimeType: rendered.mimeType,
     width: rendered.width,
     height: rendered.height,
@@ -203,7 +208,7 @@ export async function renderPdfPreviewPage(options: {
       return {
         totalPages: durable.totalPages,
         pageNumber: options.pageNumber,
-        base64: durable.jpeg.toString('base64'),
+        jpeg: durable.jpeg,
         mimeType: durable.mimeType,
         width: durable.width,
         height: durable.height,

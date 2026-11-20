@@ -53,6 +53,26 @@ describe('document-page-window', () => {
     expect(pageFromScrollTop(1500, 800, 20)).toBe(2)
   })
 
+  it('pins to the last page near max scroll so a short final page gets sharp focus', () => {
+    // Three pages; last row shorter than the viewport. At max scroll the top edge
+    // still sits on page 2, but the user is looking at page 3.
+    const heights = [900, 900, 700]
+    const getRowHeight = (page: number) => heights[page - 1] ?? 900
+    const viewport = 1000
+    const contentHeight = 2500
+    const maxScroll = contentHeight - viewport
+    expect(pageFromMeasuredScrollTop(maxScroll, 3, getRowHeight)).toBe(2)
+    expect(pageFromMeasuredScrollTop(maxScroll, 3, getRowHeight, viewport)).toBe(3)
+    expect(pageFromMeasuredScrollTop(maxScroll - 1, 3, getRowHeight, viewport)).toBe(3)
+  })
+
+  it('uses a viewport focus line so the bottom-visible page can become current', () => {
+    const heights = [900, 900, 900]
+    const getRowHeight = (page: number) => heights[page - 1] ?? 900
+    // scrollTop 800 → top edge on page 1; focus line (~800+350) lands on page 2.
+    expect(pageFromMeasuredScrollTop(800, 3, getRowHeight, 1000)).toBe(2)
+  })
+
   it('reserves spacer height for unmounted pages', () => {
     expect(documentWindowSpacers(9, 11, 40, 700)).toEqual({
       top: 8 * 700,

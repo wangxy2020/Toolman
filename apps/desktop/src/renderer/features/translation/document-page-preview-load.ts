@@ -13,23 +13,29 @@ import { isDocumentScrollBusy } from './document-scroll-gate'
 import { resolvePdfPreviewPriority } from './document-page-preview-policy'
 
 /**
- * Decode base64 via chunked `atob` — Electron CSP blocks `fetch(data:…)`
- * ("Failed to fetch"), so data-URL fetch cannot be used here.
+ * Build an object URL from raw IPC bytes (preferred) or legacy base64.
+ * Binary path is sync — no chunked `atob` that stalls the renderer during flips.
  */
-async function base64ToObjectUrl(base64: string, mimeType: string): Promise<string> {
-  const binary = atob(base64)
-  const bytes = new Uint8Array(binary.length)
-  const chunk = 48_000
-  for (let offset = 0; offset < binary.length; offset += chunk) {
-    const end = Math.min(binary.length, offset + chunk)
-    for (let index = offset; index < end; index += 1) {
-      bytes[index] = binary.charCodeAt(index)
-    }
-    if (end < binary.length) {
-      await new Promise<void>((resolve) => setTimeout(resolve, 0))
-    }
+function previewBytesToObjectUrl(
+  bytes: Uint8Array | undefined,
+  base64: string | undefined,
+  mimeType: string,
+): string {
+  if (bytes && bytes.byteLength > 0) {
+    // Copy into a tight ArrayBuffer so Blob owns stable memory after IPC detach.
+    const copy = new Uint8Array(bytes.byteLength)
+    copy.set(bytes)
+    return URL.createObjectURL(new Blob([copy], { type: mimeType }))
   }
-  return URL.createObjectURL(new Blob([bytes], { type: mimeType }))
+  if (!base64) {
+    throw new Error('PDF preview payload missing bytes')
+  }
+  const binary = atob(base64)
+  const out = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) {
+    out[index] = binary.charCodeAt(index)
+  }
+  return URL.createObjectURL(new Blob([out], { type: mimeType }))
 }
 
 export function isPdfPreviewRenderDropped(error: unknown): boolean {
@@ -60,7 +66,8 @@ function invokePdfPageRender(options: {
 /**
  * Load a preview into the session cache; concurrent callers share one IPC request.
  *
- * Mid-fling: refuse to *start* new work unless `allowWhileBusy` (sharp upgrade).
+ * Mid-fling: refuse to *start* new neighbor work unless `allowWhileBusy`.
+ * The focused page always proceeds so the landed frame never stays white.
  * Finished rasters are always cached.
  */
 export function ensurePdfPageImage(options: {
@@ -71,12 +78,14 @@ export function ensurePdfPageImage(options: {
   /** Current-page sharp upgrade — do not drop because layout jitter set busy. */
   allowWhileBusy?: boolean
 }): Promise<string> {
-  const { filePath, pageNumber, renderWidth, allowWhileBusy = false } = options
+  const { filePath, pageNumber, renderWidth, currentPage, allowWhileBusy = false } = options
+  const focused = pageNumber === currentPage
+  const allow = allowWhileBusy || focused
   const key = pageImageCacheKey(filePath, pageNumber, renderWidth)
   const cached = getCachedPageImage(key)
   if (cached) return Promise.resolve(cached)
 
-  if (!allowWhileBusy && isDocumentScrollBusy()) {
+  if (!allow && isDocumentScrollBusy()) {
     const error = new Error('PREVIEW_RENDER_DROPPED')
     error.name = 'PreviewRenderDroppedError'
     return Promise.reject(error)
@@ -86,7 +95,7 @@ export function ensurePdfPageImage(options: {
   if (inflight) return inflight
 
   return rememberPageImageInflight(key, async () => {
-    if (!allowWhileBusy && isDocumentScrollBusy()) {
+    if (!allow && isDocumentScrollBusy()) {
       const error = new Error('PREVIEW_RENDER_DROPPED')
       error.name = 'PreviewRenderDroppedError'
       throw error
@@ -102,7 +111,7 @@ export function ensurePdfPageImage(options: {
       throw error
     }
     const data = TranslationDocumentRenderPageOutputSchema.parse(result.data)
-    const objectUrl = await base64ToObjectUrl(data.base64, data.mimeType)
+    const objectUrl = previewBytesToObjectUrl(data.bytes, data.base64, data.mimeType)
     setCachedPageImage(key, objectUrl)
     return objectUrl
   })

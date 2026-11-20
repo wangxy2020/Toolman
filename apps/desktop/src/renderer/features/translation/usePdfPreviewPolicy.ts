@@ -99,12 +99,27 @@ export function usePdfPreviewPolicy(
     }
 
     void (async () => {
-      // 1) Immediate readable first paint for the landed page.
-      const readableUrl = await loadWidth(landedPage, fastWidth)
+      // 1) Immediate readable first paint for the landed page (focused = never busy-drop).
+      let readableUrl =
+        getCachedPageImage(pageImageCacheKey(filePath, landedPage, fastWidth)) ??
+        (await loadWidth(landedPage, fastWidth))
+      if (!stillCurrent()) return
+      if (!readableUrl) {
+        readableUrl = await ensurePdfPageImageWhenIdle({
+          filePath,
+          pageNumber: landedPage,
+          renderWidth: fastWidth,
+          currentPage: landedPage,
+        }).catch((error) => {
+          if (isPdfPreviewRenderDropped(error)) return null
+          return null
+        })
+      }
       if (!stillCurrent()) return
 
       // 2) Neighbor readable prefetch before sharp — scan sharp rasters are slow
-      // and must not block the next page's first paint.
+      // and must not block the next page's first paint. Neighbors may soft-drop
+      // while scrolling; focused work already finished above.
       for (const item of fetchPages) {
         if (!stillCurrent()) return
         if (item.pageNumber === landedPage) continue

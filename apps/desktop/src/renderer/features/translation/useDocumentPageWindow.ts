@@ -29,7 +29,12 @@ export function useDocumentPageWindow(
       if (frame) return
       frame = window.requestAnimationFrame(() => {
         frame = 0
-        const next = pageFromMeasuredScrollTop(root.scrollTop, totalPages, getRowHeightRef.current)
+        const next = pageFromMeasuredScrollTop(
+          root.scrollTop,
+          totalPages,
+          getRowHeightRef.current,
+          root.clientHeight,
+        )
         setCurrentPage((previous) => (previous === next ? previous : next))
       })
     }

@@ -2,15 +2,16 @@
  * Progressive left-pane PDF preview policy (IMA-like).
  *
  * Landed-page first: fling past unloaded pages → stop on N → only N is required.
- * Flow on settle: N immediate/readable (≥720) → N sharp (≤1440) → neighbor
- * readable prefetch. Soft-cancel drops other pages without killing the preview
- * worker / pdf.js document cache.
+ * Flow on settle: N immediate/readable (≥720) → neighbor ±1 readable → N sharp
+ * (≤1440). Soft-cancel drops other pages without killing the preview worker /
+ * pdf.js document cache. Focused page never busy-drops (no white frame).
  */
 
 export type PdfPreviewDirection = 1 | -1
 export const PDF_PREVIEW_NEAR_AHEAD = 1
 export const PDF_PREVIEW_PREFETCH_AHEAD = 1
-export const PDF_PREVIEW_PREFETCH_BEHIND = 0
+/** One behind keeps back-scroll warm; soft-cancel still drops far pages. */
+export const PDF_PREVIEW_PREFETCH_BEHIND = 1
 export const PDF_PREVIEW_ACTIVE_RADIUS = 1
 /** First paint = readable frame (text + scan). */
 export const PDF_PREVIEW_FAST_MAX_WIDTH = 720
@@ -18,8 +19,8 @@ export const PDF_PREVIEW_FAST_MAX_WIDTH = 720
 export const PDF_PREVIEW_MAX_RENDER_WIDTH = 1440
 export const PDF_PREVIEW_MAX_DPR = 2
 export const PDF_PREVIEW_SHARP_MIN_BOOST = 1.75
-/** Wait before sharp so neighbor prefetch can claim the worker first. */
-export const PDF_PREVIEW_SHARP_DELAY_MS = 280
+/** Short settle so neighbor readable can enqueue first without a long blank wait. */
+export const PDF_PREVIEW_SHARP_DELAY_MS = 120
 export type PdfPreviewPrefetchExtent = 'none' | 'near' | 'far'
 
 function bucketPreviewWidth(width: number): number {
