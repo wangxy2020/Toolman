@@ -28,10 +28,10 @@ import {
   bindAssistantKnowledgeBase,
   openGroupAgentSession,
   stageKnowledgeFilesForChat,
-  updateAssistantModel,
   updateAssistantWorkingDirectory,
   updateWorkspaceSettings,
 } from './chat-page-handlers'
+import { isTranslationDocumentPath } from '../translation/translation-document-utils'
 
 type ChatApi = ReturnType<typeof useChat>
 type NotesApi = ReturnType<typeof useNotes>
@@ -191,18 +191,10 @@ export function useChatPageInterop(deps: {
         // fall back to chat-page active only when the caller did not pass one.
         const resolvedKb =
           knowledgeBase !== undefined ? knowledgeBase : activeKnowledgeBase
+        // Session-only model switch — do not permanently overwrite the assistant.
         const analysisModelId = resolveKnowledgeAnalysisModelId(resolvedKb, chat.providers)
-        let assistantsDirty = false
         if (analysisModelId) {
           chat.setSelectedModelIds([analysisModelId])
-          if (activeAssistant && activeAssistant.modelId !== analysisModelId) {
-            const updated = await updateAssistantModel(activeAssistant, analysisModelId)
-            if (!updated.ok) {
-              chat.setError(updated.error)
-              return
-            }
-            assistantsDirty = true
-          }
         }
 
         // Bind the source KB and turn on knowledge search so RAG runs after 去提问.
@@ -212,17 +204,15 @@ export function useChatPageInterop(deps: {
             chat.setError(bound.error)
             return
           }
-          if (bound.changed) assistantsDirty = true
           updateAppSettings?.({
             kbEnabledByAssistantId: {
               ...(appSettings?.kbEnabledByAssistantId ?? {}),
               [activeAssistant.id]: true,
             },
           })
-        }
-
-        if (assistantsDirty) {
-          await chat.loadAssistants()
+          if (bound.changed) {
+            await chat.loadAssistants()
+          }
         }
 
         setAgentPrefillAttachments(result.attachments)
@@ -250,9 +240,9 @@ export function useChatPageInterop(deps: {
     (items: KnowledgeFilePanelItem[], _knowledgeBase?: KnowledgeBase | null) => {
       const paths = items
         .map((item) => item.absolutePath?.trim())
-        .filter((path): path is string => Boolean(path))
+        .filter((path): path is string => Boolean(path && isTranslationDocumentPath(path)))
       if (paths.length === 0) {
-        chat.setError('所选知识库文件没有可用的本地路径')
+        chat.setError('所选文件无法带到翻译（仅支持 PDF / Word / Excel）')
         return
       }
       pendingTranslateKnowledgePathsRef.current = paths

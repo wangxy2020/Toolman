@@ -65,13 +65,15 @@ export function useChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
     if (navigation.activeView !== 'translate' || previous === 'translate') return
 
     navigation.setTranslationSection(DEFAULT_TRANSLATION_SECTION)
-    translation.enterDocumentsSection()
-    // Open KB files after enterDocumentsSection so selection is not overwritten.
+    // Open KB files first when pending; skip enterDocumentsSection so it cannot
+    // select documents[0] over the file we are about to open.
     const pendingPaths = crossModule.consumePendingTranslateKnowledgePaths()
     if (pendingPaths?.length) {
       for (const filePath of pendingPaths) {
         translation.openDocument(filePath)
       }
+    } else {
+      translation.enterDocumentsSection()
     }
     navigation.setTranslationWorkspaceKey((value) => value + 1)
   }, [

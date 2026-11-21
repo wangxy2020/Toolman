@@ -1,6 +1,6 @@
 # Toolman 发布状态总览
 
-> **版本**：`0.2.0-rc.10` · **通道**：`staging` · **更新**：2026-06-28  
+> **版本**：`0.7.0-rc.7.4` · **通道**：`staging` · **更新**：2026-11-21  
 > **保留文档**：[RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md) · [PRODUCTION_CONFIG.md](./PRODUCTION_CONFIG.md) · [RC1_DOGFOOD.md](./RC1_DOGFOOD.md)
 
 本文档合并原 Phase/Plan/Status/Kickoff/WAN 签字/缺陷跟踪等工程文档，避免多份重复维护。
@@ -15,7 +15,7 @@
 | D2 | WAN 群组 | **必须**跨网段协作；TURN + 跨 NAT 验收为 P1 必做 |
 | D3 | Yjs 点赞/收藏 | HTTP-only，禁止 Yjs CRDT 半同步 |
 | D4 | 语义搜索 | GA 阶段 Hub 搜索 **全量 Fallback SQLite FTS**，禁止对用户 501 |
-| D5 | 明确不做 | 自动化/工作流、翻译、助手课堂、代码工具、项目管理、真实支付、QQ/Slack 等 |
+| D5 | 明确不做（开源 RC） | 真实支付结算、QQ/Slack 等第三方 IM 深度集成；其余模块（翻译 / 项目管理 / 助手课堂等）已按产品迭代落地 |
 
 **开源 RC 就绪定义**（个人开发者 / 开源初期）：`pnpm rc1:preflight` 绿 · P0=0 · adhoc 签名 DMG 可安装（Gatekeeper 需右键打开）· README 标明 Beta。
 

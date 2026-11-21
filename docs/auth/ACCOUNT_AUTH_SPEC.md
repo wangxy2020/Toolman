@@ -228,26 +228,7 @@ Shared types：`AuthSession`, `AuthProvider`, `RegistrationStatus`, `ProductSku`
 
 ---
 
-## 11. 开发任务索引
-
-| 任务 | 状态 |
-|------|------|
-| Task-001 本文档 | ✅ 已确认 |
-| Task-002 数据模型 + IPC 契约 | ✅ 已完成 |
-| Task-003 Feature Gate | ✅ 已完成 |
-| Task-004 用户弹窗 IA | ✅ 已完成 |
-| Task-005 Firebase（Email > Google > Apple） | ✅ 已完成 |
-| Task-006 国内手机号 | ✅ 已完成 |
-| Task-007 微信 + 账户合并 | ✅ 已完成 |
-| Task-008 Hub 统一 JWT 鉴权 | ✅ 已完成 |
-| Task-009 群组门槛 + 设备绑定 | ✅ 已完成 |
-| Task-010 资料同步 + SKU 展示 | ✅ 已完成 |
-| Task-011 区域与构建分流 | ✅ 已完成 |
-| Task-012 测试与安全 | ✅ 已完成 |
-
----
-
-## 12. Firebase 配置（Task-005）
+## 11. Firebase 配置
 
 桌面端 Main 与 Renderer 共用以下环境变量（开发时在启动 Electron 前 export，或使用 `.env.local` 由启动脚本注入）：
 
@@ -263,7 +244,7 @@ OAuth（Google / Apple）在 Renderer 使用 Firebase JS SDK `signInWithPopup`�
 
 ---
 
-## 13. 腾讯云短信配置（Task-006）
+## 12. 腾讯云短信配置
 
 | 变量 | 说明 |
 |------|------|
@@ -284,7 +265,7 @@ OAuth（Google / Apple）在 Renderer 使用 Firebase JS SDK `signInWithPopup`�
 
 ---
 
-## 14. 微信开放平台配置（Task-007）
+## 13. 微信开放平台配置
 
 | 变量 | 说明 |
 |------|------|
@@ -302,7 +283,7 @@ OAuth（Google / Apple）在 Renderer 使用 Firebase JS SDK `signInWithPopup`�
 
 ---
 
-## 16. Hub JWT 鉴权（Task-008）
+## 14. Hub JWT 鉴权
 
 桌面端 Main 进程在 `userData` 生成并持久化 HS256 共享密钥，启动本地 Hub 时注入 `COMMUNITY_HUB_JWT_SECRET`。
 
@@ -319,7 +300,7 @@ Claims：`iss=toolman-desktop`，`aud=toolman-community-hub`，TTL 默认 3600s�
 
 ---
 
-## 17. 群组门槛与设备绑定（Task-009）
+## 15. 群组门槛与设备绑定
 
 | 层级 | 行为 |
 |------|------|
@@ -330,7 +311,7 @@ Claims：`iss=toolman-desktop`，`aud=toolman-community-hub`，TTL 默认 3600s�
 
 ---
 
-## 18. 资料同步与 SKU 展示（Task-010）
+## 16. 资料同步与 SKU 展示
 
 | 组件 | 说明 |
 |------|------|
@@ -343,7 +324,7 @@ Claims：`iss=toolman-desktop`，`aud=toolman-community-hub`，TTL 默认 3600s�
 
 ---
 
-## 19. 区域与构建分流（Task-011）
+## 17. 区域与构建分流
 
 通过环境变量 `TOOLMAN_AUTH_BUILD_REGION`（兼容 `TOOLMAN_BUILD_REGION`）控制发行构建的登录入口：
 
@@ -363,7 +344,7 @@ Claims：`iss=toolman-desktop`，`aud=toolman-community-hub`，TTL 默认 3600s�
 
 ---
 
-## 20. 测试与安全（Task-012）
+## 18. 测试与安全
 
 | 类别 | 内容 |
 |------|------|
@@ -373,23 +354,11 @@ Claims：`iss=toolman-desktop`，`aud=toolman-community-hub`，TTL 默认 3600s�
 | 测试 | shared + desktop 单元测试：security helpers、reauth、session gate、Hub JWT |
 | 文档 | [AUTH_DEVELOPER.md](./AUTH_DEVELOPER.md) 开发者配置与用户注册说明 |
 
-安全检查清单：
-
-- [x] Token 仅存 Main `safeStorage` 加密 ref
-- [x] 注销需确认文案 + 超时 re-auth
-- [x] IPC 写操作经 auth gate 拦截
-- [x] Hub 访客 JWT 禁止写 API
-- [x] 构建分流限制登录方式
-
 ---
 
-## 15. 开放项（编码前可并行确认）
+## 19. 开放项
 
 - 专业版 `pro` 具体 entitlements 列表（不影响社区版 MVP）。
 - 云端 Hub 首版 URL 与 Token issuer 是否独立域名。
 - 注销后社区 UGC 匿名化规则（昵称显示为「已注销用户」等）。
 
----
-
-**文档确认人**: 产品决策已录入 §1  
-**下一步**: 账户体系 V1 编码任务已全部完成；后续可按开放项迭代 pro entitlements 与云端 Hub exchange。
