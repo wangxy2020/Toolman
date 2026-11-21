@@ -48,7 +48,16 @@ export interface KnowledgePageProps {
   onSyncKnowledgeFolderError?: (message: string | null) => void
   systemPaths?: SystemPaths | null
   onOpenNote?: (noteId: string) => boolean
-  onChatWithKnowledgeFiles?: (items: KnowledgeFilePanelItem[]) => void
+  /** Second arg is the KB whose settings (e.g. analysis model) apply — including default-folder KBs. */
+  onChatWithKnowledgeFiles?: (
+    items: KnowledgeFilePanelItem[],
+    knowledgeBase?: KnowledgeBase | null,
+  ) => void
+  /** Open selected KB files in the translation module (uses indexed text when available). */
+  onTranslateWithKnowledgeFiles?: (
+    items: KnowledgeFilePanelItem[],
+    knowledgeBase?: KnowledgeBase | null,
+  ) => void
 }
 
 export interface KnowledgePageStatusRegistryProps {

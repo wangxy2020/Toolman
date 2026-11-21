@@ -45,7 +45,8 @@ export function useTranslationPageActions(options: {
   onSaveContrast: (input: SaveTranslationContrastInput) => string | null
   onSaveDocument: (input: SaveTranslationDocumentInput) => string | null
   onSaveDocumentToNotes?: (title: string, content: string) => void
-  onOpenDocumentPath: (filePath: string) => void
+  onOpenDocumentPath: (filePath: string, folderId?: string) => void
+  openDocumentFolderId?: string
   onClearActiveDocument?: () => void
   onResetDocumentContent?: (documentId: string) => void
   cancelSnapshotsPersist?: () => void
@@ -82,6 +83,7 @@ export function useTranslationPageActions(options: {
     onSaveDocument,
     onSaveDocumentToNotes,
     onOpenDocumentPath,
+    openDocumentFolderId,
     onResetDocumentContent,
     cancelSnapshotsPersist,
     showStatus,
@@ -108,6 +110,7 @@ export function useTranslationPageActions(options: {
     onSaveDocument,
     onSaveDocumentToNotes,
     onOpenDocumentPath,
+    openDocumentFolderId,
     showStatus,
     getPendingPageRemark,
   })

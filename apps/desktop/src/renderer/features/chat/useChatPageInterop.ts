@@ -1,5 +1,11 @@
-import { useCallback, useState } from 'react'
-import { IpcChannel, type Assistant, type P2pWorkspace, type Workspace } from '@toolman/shared'
+import { useCallback, useRef, useState } from 'react'
+import {
+  IpcChannel,
+  type Assistant,
+  type KnowledgeBase,
+  type P2pWorkspace,
+  type Workspace,
+} from '@toolman/shared'
 import { getEffectiveWorkingDirectory } from './workspace-utils'
 import type { CodeEditorId } from './code-editor-options'
 import type {
@@ -10,15 +16,19 @@ import type {
 import type { OpenGroupAgentSessionRequest } from '../group/group-agent-open'
 import type { AppView } from '../../types/app-view'
 import type { KnowledgeFilePanelItem } from '../knowledge/KnowledgeBaseFilePanel'
+import { resolveKnowledgeAnalysisModelId } from '../knowledge/resolve-knowledge-analysis-model'
 import type { PendingAttachment } from './chat-attachments'
 import { buildChatWithNoteDraft } from '../notes/notes-chat-draft'
 import type { useChat } from './useChat'
 import type { useNotes } from '../notes/useNotes'
 import type { useP2pWorkspaces } from '../group/useP2pWorkspaces'
 import type { useSystemPaths } from './useSystemPaths'
+import type { AppSettings } from '../settings/app-settings'
 import {
+  bindAssistantKnowledgeBase,
   openGroupAgentSession,
   stageKnowledgeFilesForChat,
+  updateAssistantModel,
   updateAssistantWorkingDirectory,
   updateWorkspaceSettings,
 } from './chat-page-handlers'
@@ -38,6 +48,9 @@ export function useChatPageInterop(deps: {
   setWorkspace: (workspace: Workspace) => void
   setActiveView: (view: AppView) => void
   activeAssistant?: Assistant
+  activeKnowledgeBase?: KnowledgeBase | null
+  appSettings?: AppSettings
+  updateAppSettings?: (patch: Partial<AppSettings>) => void
 }) {
   const {
     chat,
@@ -49,6 +62,9 @@ export function useChatPageInterop(deps: {
     setWorkspace,
     setActiveView,
     activeAssistant,
+    activeKnowledgeBase = null,
+    appSettings,
+    updateAppSettings,
   } = deps
 
   const [agentPrefillText, setAgentPrefillText] = useState<string | null>(null)
@@ -56,6 +72,8 @@ export function useChatPageInterop(deps: {
     PendingAttachment[] | null
   >(null)
   const [chatPrefillRevision, setChatPrefillRevision] = useState(0)
+  /** Consumed when entering translate view so openDocument wins over enterDocumentsSection. */
+  const pendingTranslateKnowledgePathsRef = useRef<string[] | null>(null)
 
   const handleSelectWorkspaceFolder = useCallback(async () => {
     if (!workspaceId) return
@@ -160,12 +178,51 @@ export function useChatPageInterop(deps: {
   )
 
   const handleChatWithKnowledgeFiles = useCallback(
-    async (items: KnowledgeFilePanelItem[]) => {
+    async (items: KnowledgeFilePanelItem[], knowledgeBase?: KnowledgeBase | null) => {
       try {
         const result = await stageKnowledgeFilesForChat(items)
         if ('error' in result) {
           chat.setError(result.error)
           return
+        }
+
+        // Prefer the KB analysis model when chatting with attached knowledge files.
+        // Use the KB passed from the knowledge page (covers default-folder virtual IDs);
+        // fall back to chat-page active only when the caller did not pass one.
+        const resolvedKb =
+          knowledgeBase !== undefined ? knowledgeBase : activeKnowledgeBase
+        const analysisModelId = resolveKnowledgeAnalysisModelId(resolvedKb, chat.providers)
+        let assistantsDirty = false
+        if (analysisModelId) {
+          chat.setSelectedModelIds([analysisModelId])
+          if (activeAssistant && activeAssistant.modelId !== analysisModelId) {
+            const updated = await updateAssistantModel(activeAssistant, analysisModelId)
+            if (!updated.ok) {
+              chat.setError(updated.error)
+              return
+            }
+            assistantsDirty = true
+          }
+        }
+
+        // Bind the source KB and turn on knowledge search so RAG runs after 去提问.
+        if (activeAssistant && resolvedKb?.id) {
+          const bound = await bindAssistantKnowledgeBase(activeAssistant, resolvedKb.id)
+          if (!bound.ok) {
+            chat.setError(bound.error)
+            return
+          }
+          if (bound.changed) assistantsDirty = true
+          updateAppSettings?.({
+            kbEnabledByAssistantId: {
+              ...(appSettings?.kbEnabledByAssistantId ?? {}),
+              [activeAssistant.id]: true,
+            },
+          })
+        }
+
+        if (assistantsDirty) {
+          await chat.loadAssistants()
         }
 
         setAgentPrefillAttachments(result.attachments)
@@ -179,8 +236,36 @@ export function useChatPageInterop(deps: {
         chat.setError(error instanceof Error ? error.message : '准备知识库附件失败')
       }
     },
-    [activeAssistant?.id, chat, setActiveView],
+    [
+      activeAssistant,
+      activeKnowledgeBase,
+      appSettings?.kbEnabledByAssistantId,
+      chat,
+      setActiveView,
+      updateAppSettings,
+    ],
   )
+
+  const handleTranslateWithKnowledgeFiles = useCallback(
+    (items: KnowledgeFilePanelItem[], _knowledgeBase?: KnowledgeBase | null) => {
+      const paths = items
+        .map((item) => item.absolutePath?.trim())
+        .filter((path): path is string => Boolean(path))
+      if (paths.length === 0) {
+        chat.setError('所选知识库文件没有可用的本地路径')
+        return
+      }
+      pendingTranslateKnowledgePathsRef.current = paths
+      setActiveView('translate')
+    },
+    [chat, setActiveView],
+  )
+
+  const consumePendingTranslateKnowledgePaths = useCallback(() => {
+    const paths = pendingTranslateKnowledgePathsRef.current
+    pendingTranslateKnowledgePathsRef.current = null
+    return paths
+  }, [])
 
   const handleOpenNote = useCallback(
     (noteId: string) => {
@@ -265,6 +350,8 @@ export function useChatPageInterop(deps: {
     handleEditUserMessage,
     handleChatWithNote,
     handleChatWithKnowledgeFiles,
+    handleTranslateWithKnowledgeFiles,
+    consumePendingTranslateKnowledgePaths,
     handleOpenNote,
     handleOpenGroupNote,
     handleSyncGroupNoteLock,

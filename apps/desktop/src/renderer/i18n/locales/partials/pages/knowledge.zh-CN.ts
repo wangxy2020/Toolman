@@ -25,7 +25,7 @@ export const knowledgePageZhCN = {
     localFiles: '本地文件',
     fileTools: '本地文件工具',
   },
-  toolbar: { chatWithFiles: '带着知识库文件去聊天' },
+  toolbar: { chatWithFiles: '去提问', translateWithFiles: '去翻译' },
   sort: { createdAt: '创建时间', size: '大小', fileName: '文件名' },
   settings: {
     titleLocal: '本地知识库设置',
@@ -47,6 +47,10 @@ export const knowledgePageZhCN = {
     storageDir: '存储目录',
     openInFinder: '在 Finder 中打开',
     embedModel: '嵌入模型',
+    embedModelHint: '用于将文档内容转换为向量，修改后需重建索引。',
+    analysisModel: '分析模型',
+    analysisModelHint:
+      '用于「去提问」时切换智能体模型，以及扫描件等文档理解。扫描 PDF 建议选择支持视觉的模型；未配置时保持当前智能体模型。',
     noModel: '没有模型',
     includeRules: '包含规则',
     excludeRules: '排除规则',

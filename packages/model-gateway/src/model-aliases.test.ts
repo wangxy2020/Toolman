@@ -22,16 +22,16 @@ describe('normalizeDeepSeekModelKey', () => {
 })
 
 describe('resolveDeepSeekChatOptions', () => {
-  it('maps chat alias to v4 flash non-thinking', () => {
+  it('maps chat alias to flash non-thinking', () => {
     expect(resolveDeepSeekChatOptions('deepseek chat')).toEqual({
-      model: 'deepseek-v4-flash',
+      model: 'deepseek-flash',
       extraBody: { thinking: { type: 'disabled' } },
     })
   })
 
-  it('maps reasoner alias to v4 flash with thinking', () => {
+  it('maps reasoner alias to flash with thinking', () => {
     expect(resolveDeepSeekChatOptions('deepseek-reasoner')).toEqual({
-      model: 'deepseek-v4-flash',
+      model: 'deepseek-flash',
       extraBody: {
         thinking: { type: 'enabled' },
         reasoning_effort: 'high',
@@ -39,13 +39,22 @@ describe('resolveDeepSeekChatOptions', () => {
     })
   })
 
-  it('keeps supported V4 model ids', () => {
+  it('maps legacy flash ids to deepseek-flash wire name', () => {
+    expect(resolveDeepSeekChatOptions('deepseek-flash')).toEqual({ model: 'deepseek-flash' })
+    expect(resolveDeepSeekChatOptions('deepseek-v4-flash')).toEqual({ model: 'deepseek-flash' })
+    expect(resolveDeepSeekChatOptions('deepseek-v4-flash-vision-exp')).toEqual({
+      model: 'deepseek-flash',
+    })
+  })
+
+  it('keeps pro model id', () => {
     expect(resolveDeepSeekChatOptions('deepseek-v4-pro')).toEqual({ model: 'deepseek-v4-pro' })
   })
 })
 
 describe('isDeepSeekSupportedModelId', () => {
-  it('accepts current V4 model ids', () => {
+  it('accepts current DeepSeek model ids', () => {
+    expect(isDeepSeekSupportedModelId('deepseek-flash')).toBe(true)
     expect(isDeepSeekSupportedModelId('deepseek-v4-flash')).toBe(true)
     expect(isDeepSeekSupportedModelId('deepseek-v4-pro')).toBe(true)
   })
@@ -63,7 +72,7 @@ describe('resolveOpenAiModelName', () => {
         { type: 'openai_compatible', baseUrl: 'https://api.deepseek.com/v1' },
         'deepseek chat',
       ),
-    ).toBe('deepseek-v4-flash')
+    ).toBe('deepseek-flash')
   })
 
   it('normalizes Kimi K3 display names on Moonshot hosts', () => {
@@ -108,13 +117,20 @@ describe('shouldOmitOpenAiSamplingParams', () => {
 })
 
 describe('providerSupportsOpenAiVision', () => {
-  it('only enables vision for deepseek-v4-pro', () => {
-    expect(deepSeekModelSupportsVision('deepseek-v4-pro')).toBe(true)
-    expect(deepSeekModelSupportsVision('deepseek-v4-flash')).toBe(false)
+  it('enables vision for deepseek-flash (not pro)', () => {
+    expect(deepSeekModelSupportsVision('deepseek-flash')).toBe(true)
+    expect(deepSeekModelSupportsVision('deepseek-v4-flash')).toBe(true)
+    expect(deepSeekModelSupportsVision('deepseek-v4-pro')).toBe(false)
     expect(
       providerSupportsOpenAiVision(
         { type: 'openai_compatible', baseUrl: 'https://api.deepseek.com/v1' },
-        'deepseek-v4-flash',
+        'deepseek-flash',
+      ),
+    ).toBe(true)
+    expect(
+      providerSupportsOpenAiVision(
+        { type: 'openai_compatible', baseUrl: 'https://api.deepseek.com/v1' },
+        'deepseek-v4-pro',
       ),
     ).toBe(false)
   })

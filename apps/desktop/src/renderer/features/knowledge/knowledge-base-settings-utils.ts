@@ -152,6 +152,7 @@ export function getInitialFormState(kb: KnowledgeBase) {
   return {
     name: kb.name,
     description: kb.description ?? '',
+    analysisModelId: kb.embedConfig.analysisModelId?.trim() || '',
     docProcessorProviderId: kb.embedConfig.docProcessorProviderId ?? '',
     chunkSize: formatOptionalNumber(kb.chunkConfig.chunkSize, DEFAULT_KNOWLEDGE_CHUNK_CONFIG.chunkSize),
     chunkOverlap: formatOptionalNumber(

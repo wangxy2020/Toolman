@@ -10,7 +10,7 @@ describe('MOBILE_PROVIDER_PRESETS', () => {
   it('defaults to DeepSeek', () => {
     expect(DEFAULT_PROVIDER_ID).toBe('deepseek')
     const preset = getProviderPreset(DEFAULT_PROVIDER_ID)
-    expect(preset.defaultModel).toBe('deepseek-v4-flash')
+    expect(preset.defaultModel).toBe('deepseek-flash')
     expect(preset.defaultBaseUrl).toContain('deepseek.com')
   })
 

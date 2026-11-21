@@ -1,7 +1,12 @@
-import { resolve } from 'node:path'
+import { createRequire } from 'node:module'
+import { cpSync, createReadStream, existsSync, statSync } from 'node:fs'
+import { dirname, extname, join, resolve } from 'node:path'
 import type { RollupLog } from 'rollup'
+import type { Plugin } from 'vite'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
+
+const require = createRequire(import.meta.url)
 
 function suppressKnownRollupWarnings(warning: RollupLog, warn: (warning: RollupLog) => void): void {
   if (
@@ -11,6 +16,62 @@ function suppressKnownRollupWarnings(warning: RollupLog, warn: (warning: RollupL
     return
   }
   warn(warning)
+}
+
+/** Serve / copy pdf.js cmaps, fonts, wasm, iccs for renderer canvas preview. */
+function pdfjsAssetsPlugin(): Plugin {
+  const pdfjsRoot = dirname(require.resolve('pdfjs-dist/package.json'))
+  const assetDirs = ['cmaps', 'standard_fonts', 'wasm', 'iccs'] as const
+
+  const contentType = (filePath: string): string => {
+    switch (extname(filePath).toLowerCase()) {
+      case '.bcmap':
+        return 'application/octet-stream'
+      case '.pfb':
+      case '.ttf':
+        return 'application/octet-stream'
+      case '.wasm':
+        return 'application/wasm'
+      case '.json':
+        return 'application/json'
+      default:
+        return 'application/octet-stream'
+    }
+  }
+
+  const copyTo = (destRoot: string) => {
+    for (const dir of assetDirs) {
+      const from = join(pdfjsRoot, dir)
+      if (!existsSync(from)) continue
+      cpSync(from, join(destRoot, 'pdfjs', dir), { recursive: true })
+    }
+  }
+
+  return {
+    name: 'toolman-pdfjs-assets',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (!req.url?.startsWith('/pdfjs/')) return next()
+        const rel = decodeURIComponent((req.url.slice('/pdfjs/'.length).split('?')[0] ?? '').replace(/^\/+/, ''))
+        if (!rel || rel.includes('..')) {
+          res.statusCode = 400
+          res.end('Bad request')
+          return
+        }
+        const filePath = join(pdfjsRoot, rel)
+        if (!filePath.startsWith(pdfjsRoot) || !existsSync(filePath) || !statSync(filePath).isFile()) {
+          res.statusCode = 404
+          res.end('Not found')
+          return
+        }
+        res.setHeader('Content-Type', contentType(filePath))
+        createReadStream(filePath).pipe(res)
+      })
+    },
+    writeBundle(options) {
+      if (options.dir) copyTo(options.dir)
+    },
+  }
 }
 
 const isReleaseBuild = process.env.TOOLMAN_RELEASE_BUILD === '1'
@@ -101,6 +162,6 @@ export default defineConfig({
         '@toolman/shared': resolve('../../packages/shared/src/index.ts'),
       },
     },
-    plugins: [react()],
+    plugins: [react(), pdfjsAssetsPlugin()],
   },
 })

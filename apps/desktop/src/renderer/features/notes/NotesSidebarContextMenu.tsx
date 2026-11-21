@@ -7,10 +7,12 @@ interface Props {
   y: number
   canDelete: boolean
   canIngest: boolean
+  canRename?: boolean
   deleteLabel: string
   onClose: () => void
   onDelete: () => void
   onIngest: () => void
+  onRename?: () => void
 }
 
 export function NotesSidebarContextMenu({
@@ -18,10 +20,12 @@ export function NotesSidebarContextMenu({
   y,
   canDelete,
   canIngest,
+  canRename = true,
   deleteLabel,
   onClose,
   onDelete,
   onIngest,
+  onRename,
 }: Props) {
   const { t } = useI18n()
 
@@ -33,7 +37,7 @@ export function NotesSidebarContextMenu({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [onClose])
 
-  if (!canDelete && !canIngest) return null
+  if (!canDelete && !canIngest && !canRename) return null
 
   return createPortal(
     <>
@@ -44,6 +48,19 @@ export function NotesSidebarContextMenu({
         onClick={onClose}
       />
       <div className="tm-group-context-menu" style={{ top: y, left: x }} role="menu">
+        {canRename && onRename ? (
+          <button
+            type="button"
+            className="tm-group-context-menu-item"
+            role="menuitem"
+            onClick={() => {
+              onRename()
+              onClose()
+            }}
+          >
+            {t('sidebar.notes.rename')}
+          </button>
+        ) : null}
         {canIngest ? (
           <button
             type="button"

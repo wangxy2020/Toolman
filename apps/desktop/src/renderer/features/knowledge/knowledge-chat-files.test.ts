@@ -3,6 +3,7 @@ import {
   buildChatWithKnowledgeFilesDraft,
   isChatAttachableKnowledgeFile,
   resolveKnowledgeFilesForChat,
+  resolveKnowledgeFilesForTranslation,
 } from './knowledge-chat-files'
 
 describe('resolveKnowledgeFilesForChat', () => {
@@ -29,6 +30,29 @@ describe('resolveKnowledgeFilesForChat', () => {
 
   it('returns empty list when nothing selected', () => {
     expect(resolveKnowledgeFilesForChat(items, new Set())).toEqual([])
+  })
+})
+
+describe('resolveKnowledgeFilesForTranslation', () => {
+  const items = [
+    {
+      id: '1',
+      title: 'a.pdf',
+      createdAt: 1,
+      updatedAt: 1,
+      absolutePath: '/tmp/a.pdf',
+    },
+    {
+      id: '2',
+      title: 'notes.md',
+      createdAt: 2,
+      updatedAt: 2,
+      absolutePath: '/tmp/notes.md',
+    },
+  ]
+
+  it('keeps translation-supported local files only', () => {
+    expect(resolveKnowledgeFilesForTranslation(items, new Set(['1', '2']))).toEqual([items[0]])
   })
 })
 

@@ -47,6 +47,9 @@ export function useChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
     setWorkspace: navigation.setWorkspace,
     setActiveView: navigation.setActiveView,
     messageSettings,
+    activeKnowledgeBase: knowledge.active,
+    appSettings,
+    updateAppSettings,
   })
 
   const translation = useTranslationRecords(
@@ -63,12 +66,21 @@ export function useChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
 
     navigation.setTranslationSection(DEFAULT_TRANSLATION_SECTION)
     translation.enterDocumentsSection()
+    // Open KB files after enterDocumentsSection so selection is not overwritten.
+    const pendingPaths = crossModule.consumePendingTranslateKnowledgePaths()
+    if (pendingPaths?.length) {
+      for (const filePath of pendingPaths) {
+        translation.openDocument(filePath)
+      }
+    }
     navigation.setTranslationWorkspaceKey((value) => value + 1)
   }, [
+    crossModule.consumePendingTranslateKnowledgePaths,
     navigation.activeView,
     navigation.setTranslationSection,
     navigation.setTranslationWorkspaceKey,
     translation.enterDocumentsSection,
+    translation.openDocument,
   ])
 
   return {

@@ -42,16 +42,19 @@ export function useKnowledgeBaseSettingsModal({
     loading: modelsLoading,
     embeddingModels,
     rerankModels,
+    chatModels,
     docProcessorProviders,
     defaultDocProcessorProviderId,
     defaultEmbeddingRef,
   } = useKnowledgeSettingsModels(workspaceId)
 
+  const defaultAnalysisModelId = chatModels[0]?.value ?? ''
   const resolvedDefaultEmbeddingRef = useResolvedDefaultEmbeddingRef(kb, defaultEmbeddingRef)
   const form = useKnowledgeBaseSettingsFormFields(
     kb,
     resolvedDefaultEmbeddingRef,
     defaultDocProcessorProviderId,
+    defaultAnalysisModelId,
   )
 
   const descriptionDisplay = useMemo(
@@ -131,6 +134,7 @@ export function useKnowledgeBaseSettingsModal({
         name: form.name,
         description: form.description,
         embeddingRef: form.embeddingRef,
+        analysisModelId: form.analysisModelId,
         docProcessorProviderId: form.docProcessorProviderId,
         rerankRef: form.rerankRef,
         chunkSize: form.chunkSize,
@@ -207,6 +211,7 @@ export function useKnowledgeBaseSettingsModal({
     footerErrorRef,
     modelsLoading,
     embeddingOptions,
+    chatModels,
     rerankModels,
     docProcessorProviders,
     watchStatus,

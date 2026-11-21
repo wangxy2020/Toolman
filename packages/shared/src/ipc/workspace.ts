@@ -120,12 +120,29 @@ export const FileReadBinaryInputSchema = z.object({
   maxBytes: z.number().int().positive().optional(),
 })
 
-export const FileReadBinaryOutputSchema = z.object({
-  fileName: z.string(),
-  mimeType: z.string(),
-  base64: z.string(),
-  byteLength: z.number().int().nonnegative(),
-})
+/** Electron IPC structured-clone delivers Buffer as Uint8Array. */
+const IpcBinaryBytesSchema = z.custom<Uint8Array>(
+  (value) =>
+    value instanceof Uint8Array ||
+    (typeof Buffer !== 'undefined' && Buffer.isBuffer(value)),
+  { message: 'Expected binary bytes' },
+)
+
+export const FileReadBinaryOutputSchema = z
+  .object({
+    fileName: z.string(),
+    mimeType: z.string(),
+    /** Preferred binary payload — avoids base64 inflate on large PDFs. */
+    bytes: IpcBinaryBytesSchema.optional(),
+    /** Legacy fallback for callers that still expect base64. */
+    base64: z.string().optional(),
+    byteLength: z.number().int().nonnegative(),
+  })
+  .refine(
+    (data) =>
+      (data.bytes != null && data.bytes.byteLength > 0) || Boolean(data.base64 && data.base64.length > 0),
+    { message: 'bytes or base64 required' },
+  )
 
 export const TranslationDocumentParsePagesInputSchema = z.object({
   path: z.string().min(1),
@@ -187,20 +204,12 @@ export const TranslationDocumentRenderPageInputSchema = z.object({
   priority: z.enum(['visible', 'prefetch']).optional(),
 })
 
-/** Electron IPC / worker structured-clone delivers Buffer as Uint8Array. */
-const PreviewImageBytesSchema = z.custom<Uint8Array>(
-  (value) =>
-    value instanceof Uint8Array ||
-    (typeof Buffer !== 'undefined' && Buffer.isBuffer(value)),
-  { message: 'Expected image bytes' },
-)
-
 export const TranslationDocumentRenderPageOutputSchema = z
   .object({
     totalPages: z.number().int().nonnegative(),
     pageNumber: z.number().int().positive(),
     /** Preferred binary payload — avoids base64 encode/decode and renderer atob. */
-    bytes: PreviewImageBytesSchema.optional(),
+    bytes: IpcBinaryBytesSchema.optional(),
     /** Legacy fallback only. */
     base64: z.string().optional(),
     mimeType: z.enum(['image/png', 'image/jpeg']),

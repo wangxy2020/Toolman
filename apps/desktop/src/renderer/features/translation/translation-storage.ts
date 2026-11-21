@@ -20,12 +20,14 @@ function migrateLegacyTranslationData(workspaceId: string): TranslationData | nu
     if (!raw) return null
     const legacy = normalizeTranslationData(JSON.parse(raw) as Partial<TranslationData>)
     const scoped: TranslationData = {
+      folders: legacy.folders,
       contrasts: legacy.contrasts.filter((item) => item.workspaceId === workspaceId),
       documents: legacy.documents.filter((item) => item.workspaceId === workspaceId),
     }
     if (scoped.contrasts.length === 0 && scoped.documents.length === 0) return null
     localStorage.setItem(translationStorageKeyForWorkspace(workspaceId), JSON.stringify(scoped))
     const remaining: TranslationData = {
+      folders: legacy.folders,
       contrasts: legacy.contrasts.filter((item) => item.workspaceId !== workspaceId),
       documents: legacy.documents.filter((item) => item.workspaceId !== workspaceId),
     }
@@ -61,6 +63,16 @@ export interface TranslationContrastItem {
   updatedAt: number
 }
 
+export const DEFAULT_TRANSLATION_FOLDER_ID = 'folder-documents'
+export const DEFAULT_TRANSLATION_FOLDER_NAME = '文档翻译'
+
+export interface TranslationFolderItem {
+  id: string
+  name: string
+  isDefault?: boolean
+  createdAt: number
+}
+
 export interface TranslationDocumentItem {
   id: string
   workspaceId: string
@@ -68,6 +80,8 @@ export interface TranslationDocumentItem {
   filePath: string
   fileName: string
   kind: TranslationDocumentKind
+  /** Sidebar folder that owns this document. */
+  folderId: string
   /** Extracted plain text from the source document. */
   sourceText: string
   targetText: string
@@ -81,6 +95,7 @@ export interface TranslationDocumentItem {
 }
 
 export interface TranslationData {
+  folders: TranslationFolderItem[]
   contrasts: TranslationContrastItem[]
   documents: TranslationDocumentItem[]
 }
@@ -91,6 +106,30 @@ export function createContrastId(): string {
 
 export function createDocumentId(): string {
   return `document-${crypto.randomUUID()}`
+}
+
+export function createFolderId(): string {
+  return `folder-${crypto.randomUUID()}`
+}
+
+export function createDefaultTranslationFolder(): TranslationFolderItem {
+  return {
+    id: DEFAULT_TRANSLATION_FOLDER_ID,
+    name: DEFAULT_TRANSLATION_FOLDER_NAME,
+    isDefault: true,
+    createdAt: 0,
+  }
+}
+
+export function buildTranslationFolderName(existing: TranslationFolderItem[]): string {
+  const used = new Set(existing.map((item) => item.name))
+  let index = existing.filter((item) => !item.isDefault).length + 1
+  let candidate = index === 1 ? '文件夹' : `文件夹 ${index}`
+  while (used.has(candidate)) {
+    index += 1
+    candidate = `文件夹 ${index}`
+  }
+  return candidate
 }
 
 function normalizePageSnapshots(
@@ -175,6 +214,11 @@ export function normalizeDocument(
       ? item.kind
       : detectTranslationDocumentKind(filePath || fileName)
 
+  const folderId =
+    typeof item.folderId === 'string' && item.folderId.trim()
+      ? item.folderId.trim()
+      : DEFAULT_TRANSLATION_FOLDER_ID
+
   return {
     id: item.id ?? createDocumentId(),
     workspaceId: item.workspaceId ?? workspaceId,
@@ -182,6 +226,7 @@ export function normalizeDocument(
     filePath,
     fileName,
     kind,
+    folderId,
     sourceText: typeof item.sourceText === 'string' ? item.sourceText : '',
     targetText: typeof item.targetText === 'string' ? item.targetText : '',
     pageSnapshots: normalizePageSnapshots(item.pageSnapshots),
@@ -192,12 +237,43 @@ export function normalizeDocument(
   }
 }
 
+function normalizeFolder(item: Partial<TranslationFolderItem>): TranslationFolderItem | null {
+  const id = typeof item.id === 'string' ? item.id.trim() : ''
+  const name = typeof item.name === 'string' ? item.name.trim() : ''
+  if (!id || !name) return null
+  return {
+    id,
+    name,
+    isDefault: item.isDefault === true || id === DEFAULT_TRANSLATION_FOLDER_ID,
+    createdAt:
+      typeof item.createdAt === 'number' && Number.isFinite(item.createdAt)
+        ? item.createdAt
+        : Date.now(),
+  }
+}
+
 export function normalizeTranslationData(
   raw: Partial<TranslationData> | null | undefined,
 ): TranslationData {
   const contrasts = Array.isArray(raw?.contrasts) ? raw.contrasts : []
   const documents = Array.isArray(raw?.documents) ? raw.documents : []
+  const rawFolders = Array.isArray(raw?.folders) ? raw.folders : []
+  const folders = rawFolders
+    .map((item) => normalizeFolder(item))
+    .filter((item): item is TranslationFolderItem => item !== null)
+  const hasDefault = folders.some((item) => item.id === DEFAULT_TRANSLATION_FOLDER_ID)
+  const normalizedFolders = hasDefault
+    ? folders.map((item) =>
+        item.id === DEFAULT_TRANSLATION_FOLDER_ID
+          ? { ...item, isDefault: true, name: item.name || DEFAULT_TRANSLATION_FOLDER_NAME }
+          : item,
+      )
+    : [createDefaultTranslationFolder(), ...folders]
+
+  const folderIds = new Set(normalizedFolders.map((item) => item.id))
+
   return {
+    folders: normalizedFolders,
     contrasts: contrasts
       .filter((item) => typeof item.workspaceId === 'string' && item.workspaceId.length > 0)
       .map((item) => normalizeContrast(item, item.workspaceId!)),
@@ -209,7 +285,12 @@ export function normalizeTranslationData(
           typeof item.filePath === 'string' &&
           item.filePath.length > 0,
       )
-      .map((item) => normalizeDocument(item, item.workspaceId!)),
+      .map((item) => {
+        const document = normalizeDocument(item, item.workspaceId!)
+        return folderIds.has(document.folderId)
+          ? document
+          : { ...document, folderId: DEFAULT_TRANSLATION_FOLDER_ID }
+      }),
   }
 }
 
@@ -221,13 +302,13 @@ export function loadTranslationData(workspaceId?: string | null): TranslationDat
       if (raw) return normalizeTranslationData(JSON.parse(raw) as Partial<TranslationData>)
       const migrated = migrateLegacyTranslationData(workspaceId)
       if (migrated) return migrated
-      return { contrasts: [], documents: [] }
+      return normalizeTranslationData({})
     }
     const raw = localStorage.getItem(TRANSLATION_STORAGE_KEY)
-    if (!raw) return { contrasts: [], documents: [] }
+    if (!raw) return normalizeTranslationData({})
     return normalizeTranslationData(JSON.parse(raw) as Partial<TranslationData>)
   } catch {
-    return { contrasts: [], documents: [] }
+    return normalizeTranslationData({})
   }
 }
 
@@ -236,6 +317,7 @@ export function saveTranslationData(data: TranslationData, workspaceId?: string 
     const normalized = normalizeTranslationData(data)
     if (workspaceId) {
       const scoped: TranslationData = {
+        folders: normalized.folders,
         contrasts: normalized.contrasts.filter((item) => item.workspaceId === workspaceId),
         documents: normalized.documents.filter((item) => item.workspaceId === workspaceId),
       }
@@ -272,6 +354,7 @@ export function createDocumentItem(
   workspaceId: string,
   filePath: string,
   languages?: [TranslationLanguage, TranslationLanguage],
+  folderId: string = DEFAULT_TRANSLATION_FOLDER_ID,
 ): TranslationDocumentItem {
   const now = Date.now()
   const fileName = fileNameFromPath(filePath)
@@ -282,6 +365,7 @@ export function createDocumentItem(
       filePath,
       fileName,
       kind: detectTranslationDocumentKind(filePath),
+      folderId,
       sourceText: '',
       targetText: '',
       languages,

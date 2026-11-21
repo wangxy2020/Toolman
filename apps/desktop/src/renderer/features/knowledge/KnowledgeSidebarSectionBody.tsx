@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { KnowledgeBase } from '@toolman/shared'
 import {
   resolveGroupSavedKnowledgeSidebarLabel,
@@ -29,6 +30,7 @@ interface SectionBodyProps {
   localFilesItems: KnowledgeBase[]
   savedSharedItems: KnowledgeBase[]
   defaultFolderLabel: string
+  renameKbId: string | null
   onSelect: (id: string) => void
   onSelectDefaultFolder: () => void
   onSelectDefaultSyncFolder: () => void
@@ -36,7 +38,15 @@ interface SectionBodyProps {
   onSelectDefaultLocalFilesFolder: () => void
   onSelectFileRegistry: () => void
   onSelectFileDedup: () => void
-  onRequestDelete: (item: KnowledgeBase, event: React.MouseEvent) => void
+  onRequestContextMenu: (item: KnowledgeBase, event: React.MouseEvent) => void
+  onStartRename: (kbId: string) => void
+  onCancelRename: () => void
+  onRename: (kbId: string, name: string) => void
+}
+
+function canManageKnowledgeBase(item: KnowledgeBase): boolean {
+  if (item.kind === 'shared') return isDeletableSavedSharedKnowledgeBase(item)
+  return isDeletableKnowledgeBase(item.name)
 }
 
 export function KnowledgeSidebarSectionBody({
@@ -50,6 +60,7 @@ export function KnowledgeSidebarSectionBody({
   localFilesItems,
   savedSharedItems,
   defaultFolderLabel,
+  renameKbId,
   onSelect,
   onSelectDefaultFolder,
   onSelectDefaultSyncFolder,
@@ -57,9 +68,39 @@ export function KnowledgeSidebarSectionBody({
   onSelectDefaultLocalFilesFolder,
   onSelectFileRegistry,
   onSelectFileDedup,
-  onRequestDelete,
+  onRequestContextMenu,
+  onStartRename,
+  onCancelRename,
+  onRename,
 }: SectionBodyProps) {
   const { t } = useI18n()
+
+  const renderManagedItem = (
+    item: KnowledgeBase,
+    options: {
+      icon: ReactNode
+      label: string
+      title: string
+      sectionId: KnowledgeSidebarSection
+    },
+  ) => {
+    const canManage = canManageKnowledgeBase(item)
+    return (
+      <KnowledgeSidebarMenuItem
+        key={item.id}
+        icon={options.icon}
+        label={options.label}
+        active={item.id === activeId && activeSection === options.sectionId}
+        title={options.title}
+        isRenaming={renameKbId === item.id}
+        onClick={() => onSelect(item.id)}
+        onContextMenu={canManage ? (event) => onRequestContextMenu(item, event) : undefined}
+        onStartRename={canManage ? () => onStartRename(item.id) : undefined}
+        onCancelRename={onCancelRename}
+        onRename={(next) => onRename(item.id, next)}
+      />
+    )
+  }
 
   if (section === 'local') {
     return (
@@ -71,25 +112,18 @@ export function KnowledgeSidebarSectionBody({
           title={t('sidebar.knowledge.defaultFolderTitle')}
           onClick={onSelectDefaultFolder}
         />
-        {localItems.map((item) => (
-          <KnowledgeSidebarMenuItem
-            key={item.id}
-            icon={<IconFolder size={14} />}
-            label={item.name}
-            active={item.id === activeId && activeSection === 'local'}
-            title={t('sidebar.knowledge.itemMeta', {
+        {localItems.map((item) =>
+          renderManagedItem(item, {
+            icon: <IconFolder size={14} />,
+            label: item.name,
+            title: t('sidebar.knowledge.itemMeta', {
               name: item.name,
               documents: item.documentCount,
               chunks: item.chunkCount,
-            })}
-            onClick={() => onSelect(item.id)}
-            onContextMenu={
-              isDeletableKnowledgeBase(item.name)
-                ? (event) => onRequestDelete(item, event)
-                : undefined
-            }
-          />
-        ))}
+            }),
+            sectionId: 'local',
+          }),
+        )}
       </>
     )
   }
@@ -104,25 +138,18 @@ export function KnowledgeSidebarSectionBody({
           title={t('sidebar.knowledge.syncDefaultTitle')}
           onClick={onSelectDefaultSyncFolder}
         />
-        {syncItems.map((item) => (
-          <KnowledgeSidebarMenuItem
-            key={item.id}
-            icon={<IconFolder size={14} />}
-            label={item.name}
-            active={item.id === activeId && activeSection === 'sync'}
-            title={t('sidebar.knowledge.itemMeta', {
+        {syncItems.map((item) =>
+          renderManagedItem(item, {
+            icon: <IconFolder size={14} />,
+            label: item.name,
+            title: t('sidebar.knowledge.itemMeta', {
               name: item.name,
               documents: item.documentCount,
               chunks: item.chunkCount,
-            })}
-            onClick={() => onSelect(item.id)}
-            onContextMenu={
-              isDeletableKnowledgeBase(item.name)
-                ? (event) => onRequestDelete(item, event)
-                : undefined
-            }
-          />
-        ))}
+            }),
+            sectionId: 'sync',
+          }),
+        )}
       </>
     )
   }
@@ -137,25 +164,18 @@ export function KnowledgeSidebarSectionBody({
           title={t('sidebar.knowledge.networkDefaultTitle')}
           onClick={onSelectDefaultNetworkFolder}
         />
-        {networkItems.map((item) => (
-          <KnowledgeSidebarMenuItem
-            key={item.id}
-            icon={<IconGlobe size={14} />}
-            label={item.name}
-            active={item.id === activeId && activeSection === 'network'}
-            title={t('sidebar.knowledge.itemMeta', {
+        {networkItems.map((item) =>
+          renderManagedItem(item, {
+            icon: <IconGlobe size={14} />,
+            label: item.name,
+            title: t('sidebar.knowledge.itemMeta', {
               name: item.name,
               documents: item.documentCount,
               chunks: item.chunkCount,
-            })}
-            onClick={() => onSelect(item.id)}
-            onContextMenu={
-              isDeletableKnowledgeBase(item.name)
-                ? (event) => onRequestDelete(item, event)
-                : undefined
-            }
-          />
-        ))}
+            }),
+            sectionId: 'network',
+          }),
+        )}
       </>
     )
   }
@@ -171,21 +191,15 @@ export function KnowledgeSidebarSectionBody({
         ) : null}
         {savedSharedItems.map((item) => {
           const sharedLabel = resolveGroupSavedKnowledgeSidebarLabel(item)
-          const canDelete = isDeletableSavedSharedKnowledgeBase(item)
-          return (
-            <KnowledgeSidebarMenuItem
-              key={item.id}
-              icon={<IconFolder size={14} />}
-              label={sharedLabel}
-              active={item.id === activeId && activeSection === 'shared'}
-              title={t('sidebar.knowledge.sharedItemMeta', {
-                name: sharedLabel,
-                documents: item.documentCount,
-              })}
-              onClick={() => onSelect(item.id)}
-              onContextMenu={canDelete ? (event) => onRequestDelete(item, event) : undefined}
-            />
-          )
+          return renderManagedItem(item, {
+            icon: <IconFolder size={14} />,
+            label: sharedLabel,
+            title: t('sidebar.knowledge.sharedItemMeta', {
+              name: sharedLabel,
+              documents: item.documentCount,
+            }),
+            sectionId: 'shared',
+          })
         })}
       </>
     )
@@ -201,24 +215,17 @@ export function KnowledgeSidebarSectionBody({
           title={t('sidebar.knowledge.localFilesDefaultTitle')}
           onClick={onSelectDefaultLocalFilesFolder}
         />
-        {localFilesItems.map((item) => (
-          <KnowledgeSidebarMenuItem
-            key={item.id}
-            icon={<IconFile size={14} />}
-            label={item.name}
-            active={item.id === activeId && activeSection === 'local-files'}
-            title={t('sidebar.knowledge.fileMeta', {
+        {localFilesItems.map((item) =>
+          renderManagedItem(item, {
+            icon: <IconFile size={14} />,
+            label: item.name,
+            title: t('sidebar.knowledge.fileMeta', {
               name: item.name,
               count: item.documentCount,
-            })}
-            onClick={() => onSelect(item.id)}
-            onContextMenu={
-              isDeletableKnowledgeBase(item.name)
-                ? (event) => onRequestDelete(item, event)
-                : undefined
-            }
-          />
-        ))}
+            }),
+            sectionId: 'local-files',
+          }),
+        )}
       </>
     )
   }

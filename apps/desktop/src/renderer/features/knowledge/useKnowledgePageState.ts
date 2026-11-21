@@ -282,6 +282,8 @@ export function useKnowledgePageState({
     breadcrumbItemName,
     settingsEnabled,
     settingsKb,
+    /** KB whose embed/analysis settings apply to the current folder view (incl. default folders). */
+    embedSettingsKb,
     importReady,
     showFileToolbar,
     isNetworkKbView,

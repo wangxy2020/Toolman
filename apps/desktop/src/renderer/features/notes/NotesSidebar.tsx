@@ -101,9 +101,6 @@ export function NotesSidebar({
             onCancelRename={() => state.setRenameTarget(null)}
             onNotebookContextMenu={(event, notebook) => {
               event.preventDefault()
-              const canDelete = !notebook.isDefault
-              const canIngest = Boolean(onIngestNotebook)
-              if (!canDelete && !canIngest) return
               state.setNotebookContextMenu({
                 x: event.clientX,
                 y: event.clientY,

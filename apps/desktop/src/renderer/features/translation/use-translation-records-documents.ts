@@ -1,7 +1,10 @@
 import { useCallback, useMemo, type Dispatch, type SetStateAction } from 'react'
 import type { TranslationLanguage } from '@toolman/shared'
 import {
+  buildTranslationFolderName,
   createDocumentItem,
+  createFolderId,
+  DEFAULT_TRANSLATION_FOLDER_ID,
   normalizeDocument,
   normalizeRenameTitle,
   normalizeTranslationData,
@@ -9,6 +12,7 @@ import {
   type TranslationData,
   type TranslationDocumentItem,
   type TranslationDocumentPageSnapshot,
+  type TranslationFolderItem,
 } from './translation-storage'
 import { setPageRemark } from './document-page-remarks'
 import type { SaveTranslationDocumentInput } from './use-translation-records-types'
@@ -47,20 +51,100 @@ export function useTranslationRecordsDocuments(options: Options) {
     [activeDocumentId, documents],
   )
 
+  const createFolder = useCallback((): TranslationFolderItem | null => {
+    if (!workspaceId) return null
+    const folder: TranslationFolderItem = {
+      id: createFolderId(),
+      name: buildTranslationFolderName(data.folders),
+      createdAt: Date.now(),
+    }
+    setData((prev) =>
+      normalizeTranslationData({
+        ...prev,
+        folders: [...prev.folders, folder],
+      }),
+    )
+    return folder
+  }, [data.folders, setData, workspaceId])
+
+  const renameFolder = useCallback(
+    (folderId: string, name: string) => {
+      const nextName = normalizeRenameTitle(name, '')
+      if (!nextName) return
+      setData((prev) =>
+        normalizeTranslationData({
+          ...prev,
+          folders: prev.folders.map((item) =>
+            item.id === folderId ? { ...item, name: nextName } : item,
+          ),
+        }),
+      )
+    },
+    [setData],
+  )
+
+  const deleteFolder = useCallback(
+    (folderId: string) => {
+      if (folderId === DEFAULT_TRANSLATION_FOLDER_ID) return
+      setData((prev) => {
+        const folder = prev.folders.find((item) => item.id === folderId)
+        if (!folder || folder.isDefault) return prev
+        return normalizeTranslationData({
+          ...prev,
+          folders: prev.folders.filter((item) => item.id !== folderId),
+          documents: prev.documents.filter((item) => item.folderId !== folderId),
+        })
+      })
+      setActiveDocumentId((current) => {
+        if (!current) return null
+        const stillExists = data.documents.some(
+          (item) => item.id === current && item.folderId !== folderId,
+        )
+        return stillExists ? current : null
+      })
+      setRenameDocumentId(null)
+    },
+    [data.documents, setActiveDocumentId, setData, setRenameDocumentId],
+  )
+
   const openDocument = useCallback(
-    (filePath: string): TranslationDocumentItem | null => {
+    (
+      filePath: string,
+      folderId: string = DEFAULT_TRANSLATION_FOLDER_ID,
+    ): TranslationDocumentItem | null => {
       if (!workspaceId || !filePath.trim()) return null
+      const resolvedFolderId =
+        data.folders.some((folder) => folder.id === folderId)
+          ? folderId
+          : DEFAULT_TRANSLATION_FOLDER_ID
 
       const existing = data.documents.find(
         (item) => item.workspaceId === workspaceId && item.filePath === filePath,
       )
       if (existing) {
+        if (existing.folderId !== resolvedFolderId) {
+          setData((prev) =>
+            normalizeTranslationData({
+              ...prev,
+              documents: prev.documents.map((item) =>
+                item.id === existing.id
+                  ? { ...item, folderId: resolvedFolderId, updatedAt: Date.now() }
+                  : item,
+              ),
+            }),
+          )
+        }
         setActiveDocumentId(existing.id)
         setRenameDocumentId(null)
-        return existing
+        return { ...existing, folderId: resolvedFolderId }
       }
 
-      const document = createDocumentItem(workspaceId, filePath, resolveDefaultLanguages())
+      const document = createDocumentItem(
+        workspaceId,
+        filePath,
+        resolveDefaultLanguages(),
+        resolvedFolderId,
+      )
       const titled = normalizeDocument(
         {
           ...document,
@@ -79,7 +163,15 @@ export function useTranslationRecordsDocuments(options: Options) {
       setRenameDocumentId(null)
       return titled
     },
-    [data.documents, resolveDefaultLanguages, setActiveDocumentId, setData, setRenameDocumentId, workspaceId],
+    [
+      data.documents,
+      data.folders,
+      resolveDefaultLanguages,
+      setActiveDocumentId,
+      setData,
+      setRenameDocumentId,
+      workspaceId,
+    ],
   )
 
   const selectDocument = useCallback(
@@ -305,6 +397,9 @@ export function useTranslationRecordsDocuments(options: Options) {
 
   return {
     activeDocument,
+    createFolder,
+    renameFolder,
+    deleteFolder,
     openDocument,
     selectDocument,
     clearActiveDocument,

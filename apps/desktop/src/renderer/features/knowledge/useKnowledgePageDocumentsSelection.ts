@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { KnowledgeFileSortField } from './knowledge-file-sort'
-import { resolveKnowledgeFilesForChat } from './knowledge-chat-files'
+import {
+  resolveKnowledgeFilesForChat,
+  resolveKnowledgeFilesForTranslation,
+} from './knowledge-chat-files'
 import type { KnowledgePageProps } from './knowledge-page-types'
 import type { UseKnowledgePageStateResult } from './useKnowledgePageState'
 import type { useKnowledgePageDocumentsList } from './useKnowledgePageDocumentsList'
@@ -11,7 +14,11 @@ export function useKnowledgePageDocumentsSelection(
   {
     section,
     onChatWithKnowledgeFiles,
-  }: Pick<KnowledgePageProps, 'section' | 'onChatWithKnowledgeFiles'>,
+    onTranslateWithKnowledgeFiles,
+  }: Pick<
+    KnowledgePageProps,
+    'section' | 'onChatWithKnowledgeFiles' | 'onTranslateWithKnowledgeFiles'
+  >,
   state: Pick<
     UseKnowledgePageStateResult,
     | 't'
@@ -21,6 +28,7 @@ export function useKnowledgePageDocumentsSelection(
     | 'setSortAscending'
     | 'importTarget'
     | 'showFileToolbar'
+    | 'embedSettingsKb'
   >,
   list: Pick<DocumentsListResult, 'documents' | 'panelDocuments'>,
 ) {
@@ -32,6 +40,7 @@ export function useKnowledgePageDocumentsSelection(
     setSortAscending,
     importTarget,
     showFileToolbar,
+    embedSettingsKb,
   } = state
   const { documents, panelDocuments } = list
 
@@ -40,6 +49,11 @@ export function useKnowledgePageDocumentsSelection(
 
   const chatAttachableFiles = useMemo(
     () => resolveKnowledgeFilesForChat(panelDocuments, selectedIds),
+    [panelDocuments, selectedIds],
+  )
+
+  const translateOpenableFiles = useMemo(
+    () => resolveKnowledgeFilesForTranslation(panelDocuments, selectedIds),
     [panelDocuments, selectedIds],
   )
 
@@ -65,7 +79,21 @@ export function useKnowledgePageDocumentsSelection(
       documents.setError('所选文件无法带到聊天（仅支持有本地路径的文件）')
       return
     }
-    onChatWithKnowledgeFiles?.(items)
+    // Pass embedSettingsKb (not raw `active`) so default-folder virtual IDs still carry analysisModelId.
+    onChatWithKnowledgeFiles?.(items, embedSettingsKb)
+  }
+
+  const handleTranslateWithFiles = () => {
+    if (selectedIds.size === 0) {
+      documents.setError(t('knowledgePage.toolbar.translateWithFiles'))
+      return
+    }
+    const items = translateOpenableFiles
+    if (items.length === 0) {
+      documents.setError('所选文件无法带到翻译（仅支持 PDF / Word / Excel）')
+      return
+    }
+    onTranslateWithKnowledgeFiles?.(items, embedSettingsKb)
   }
 
   const handleToggleSelect = (id: string) => {
@@ -107,7 +135,9 @@ export function useKnowledgePageDocumentsSelection(
     contextMenu,
     setContextMenu,
     chatAttachableFiles,
+    translateOpenableFiles,
     handleChatWithFiles,
+    handleTranslateWithFiles,
     handleToggleSelect,
     handleSelectAll,
     handleClearSelection,

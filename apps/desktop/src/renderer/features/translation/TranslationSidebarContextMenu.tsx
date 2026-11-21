@@ -8,7 +8,6 @@ interface Props {
   onClose: () => void
   onRename: () => void
   onAddToKnowledge: () => void
-  onAddToNotes: () => void
   onDelete: () => void
 }
 
@@ -18,7 +17,6 @@ export function TranslationSidebarContextMenu({
   onClose,
   onRename,
   onAddToKnowledge,
-  onAddToNotes,
   onDelete,
 }: Props) {
   const { t } = useI18n()
@@ -61,17 +59,6 @@ export function TranslationSidebarContextMenu({
           }}
         >
           {t('translationPage.sidebar.addToKnowledge')}
-        </button>
-        <button
-          type="button"
-          className="tm-group-context-menu-item"
-          role="menuitem"
-          onClick={() => {
-            onAddToNotes()
-            onClose()
-          }}
-        >
-          {t('translationPage.sidebar.addToNotes')}
         </button>
         <button
           type="button"

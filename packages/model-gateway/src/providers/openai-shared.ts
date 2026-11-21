@@ -89,7 +89,7 @@ export function resolveOpenAiPingModel(config: ProviderConfig): string {
     return resolveOpenAiModelName(config, config.testModel)
   }
   const base = (config.baseUrl ?? '').toLowerCase()
-  if (base.includes('deepseek')) return 'deepseek-v4-flash'
+  if (base.includes('deepseek')) return 'deepseek-flash'
   if (base.includes('moonshot') || base.includes('kimi.ai')) return 'kimi-k2.6'
   if (base.includes('dashscope') || base.includes('aliyuncs')) return 'qwen-plus'
   if (base.includes('bigmodel')) return 'glm-4-flash'

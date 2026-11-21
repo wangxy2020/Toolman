@@ -5,8 +5,9 @@ import type { useChat } from './useChat'
 import type { useNotes } from '../notes/useNotes'
 import type { useP2pWorkspaces } from '../group/useP2pWorkspaces'
 import type { useSystemPaths } from './useSystemPaths'
-import type { Workspace } from '@toolman/shared'
+import type { KnowledgeBase, Workspace } from '@toolman/shared'
 import type { AppView } from '../../types/app-view'
+import type { AppSettings } from '../settings/app-settings'
 
 export function useChatPageCrossModule(deps: {
   chat: ReturnType<typeof useChat>
@@ -18,11 +19,15 @@ export function useChatPageCrossModule(deps: {
   setWorkspace: (workspace: Workspace) => void
   setActiveView: (view: AppView) => void
   messageSettings: MessageSettings
+  activeKnowledgeBase?: KnowledgeBase | null
+  appSettings?: AppSettings
+  updateAppSettings?: (patch: Partial<AppSettings>) => void
 }) {
   const assistant = useChatPageAssistant(deps.chat, deps.messageSettings)
   const interop = useChatPageInterop({
     ...deps,
     activeAssistant: assistant.activeAssistant ?? undefined,
+    activeKnowledgeBase: deps.activeKnowledgeBase ?? null,
   })
 
   return {

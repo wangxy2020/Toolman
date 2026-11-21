@@ -60,6 +60,8 @@ export function useTranslationRecords(
       .sort((left, right) => right.updatedAt - left.updatedAt)
   }, [data.documents, workspaceId])
 
+  const folders = useMemo(() => data.folders, [data.folders])
+
   const contrastApi = useTranslationRecordsContrasts({
     workspaceId,
     untitledLabel,
@@ -91,12 +93,16 @@ export function useTranslationRecords(
   return {
     contrasts,
     documents,
+    folders,
     activeContrastId,
     activeDocumentId,
     activeContrast: contrastApi.activeContrast,
     activeDocument: documentApi.activeDocument,
     renameContrastId,
     renameDocumentId,
+    createFolder: documentApi.createFolder,
+    renameFolder: documentApi.renameFolder,
+    deleteFolder: documentApi.deleteFolder,
     openDocument: documentApi.openDocument,
     selectDocument: documentApi.selectDocument,
     clearActiveDocument: documentApi.clearActiveDocument,

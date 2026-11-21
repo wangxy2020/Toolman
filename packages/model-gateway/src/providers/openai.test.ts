@@ -25,7 +25,22 @@ describe('formatMessagesForOpenAi', () => {
     })
   })
 
-  it('flattens image_url parts for deepseek flash models', () => {
+  it('keeps image_url parts for deepseek-flash', () => {
+    const config = { type: 'openai_compatible' as const, baseUrl: 'https://api.deepseek.com/v1' }
+    const content = [
+      { type: 'text' as const, text: 'describe this' },
+      { type: 'image_url' as const, image_url: { url: 'data:image/png;base64,abc' } },
+    ]
+    const formatted = formatMessagesForOpenAi(
+      [{ role: 'user', content }],
+      config,
+      'deepseek-flash',
+    )
+
+    expect(formatted[0]?.content).toEqual(content)
+  })
+
+  it('flattens image_url parts for deepseek-v4-pro (text-only)', () => {
     const config = { type: 'openai_compatible' as const, baseUrl: 'https://api.deepseek.com/v1' }
     const formatted = formatMessagesForOpenAi(
       [
@@ -38,7 +53,7 @@ describe('formatMessagesForOpenAi', () => {
         },
       ],
       config,
-      'deepseek-v4-flash',
+      'deepseek-v4-pro',
     )
 
     expect(formatted[0]?.content).toBe(

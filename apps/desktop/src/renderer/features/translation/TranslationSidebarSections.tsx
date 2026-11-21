@@ -1,39 +1,49 @@
 import type { MouseEvent } from 'react'
 import { IconChevronRight, IconPlus } from '../../components/icons'
+import { SidebarRenameInput } from '../notes/SidebarRenameInput'
 import { TranslationSidebarDocumentItem } from './TranslationSidebarDocumentItem'
-import type { TranslationDocumentItem } from './translation-storage'
 import {
-  TRANSLATION_SIDEBAR_SECTIONS,
-  type TranslationSidebarSection,
-} from './translation-sidebar-types'
+  normalizeRenameTitle,
+  type TranslationDocumentItem,
+  type TranslationFolderItem,
+} from './translation-storage'
+import type { TranslationSidebarSection } from './translation-sidebar-types'
 
 type Props = {
   t: (key: string) => string
   configEmptyHint: string
+  folders: TranslationFolderItem[]
   activeSection: TranslationSidebarSection
   expanded: Set<TranslationSidebarSection>
   documents: TranslationDocumentItem[]
   activeDocumentId: string | null
   renameDocumentId: string | null
+  renameFolderId: string | null
   toggleExpanded: (section: TranslationSidebarSection) => void
   handleSectionClick: (section: TranslationSidebarSection) => void
-  handleOpenDocument: () => void
+  handleOpenDocument: (folderId: string) => void
   onSelectDocument: (documentId: string) => void
   onRenameDocument: (documentId: string, title: string) => void
   onStartRenameDocument: (documentId: string) => void
   onCancelRenameDocument: () => void
+  onRenameFolder: (folderId: string, name: string) => void
+  onStartRenameFolder: (folderId: string) => void
+  onCancelRenameFolder: () => void
   handleDocumentContextMenu: (event: MouseEvent, document: TranslationDocumentItem) => void
+  handleFolderContextMenu: (event: MouseEvent, folder: TranslationFolderItem) => void
 }
 
 export function TranslationSidebarSections(props: Props) {
   const {
     t,
     configEmptyHint,
+    folders,
     activeSection,
     expanded,
     documents,
     activeDocumentId,
     renameDocumentId,
+    renameFolderId,
     toggleExpanded,
     handleSectionClick,
     handleOpenDocument,
@@ -41,19 +51,24 @@ export function TranslationSidebarSections(props: Props) {
     onRenameDocument,
     onStartRenameDocument,
     onCancelRenameDocument,
+    onRenameFolder,
+    onStartRenameFolder,
+    onCancelRenameFolder,
     handleDocumentContextMenu,
+    handleFolderContextMenu,
   } = props
 
   return (
     <div className="tm-sidebar-list">
-      {TRANSLATION_SIDEBAR_SECTIONS.map((section) => {
-        const isOpen = expanded.has(section.id)
-        const hasActiveChild = Boolean(activeDocumentId)
-        const isSectionActive = activeSection === section.id && !hasActiveChild
-        const sectionLabel = t(`translationPage.sections.${section.id}`)
+      {folders.map((folder) => {
+        const isOpen = expanded.has(folder.id)
+        const folderDocuments = documents.filter((document) => document.folderId === folder.id)
+        const hasActiveChild = folderDocuments.some((document) => document.id === activeDocumentId)
+        const isSectionActive = activeSection === folder.id && !hasActiveChild
+        const isRenamingFolder = renameFolderId === folder.id
 
         return (
-          <div key={section.id} className="tm-assistant-group">
+          <div key={folder.id} className="tm-assistant-group">
             <div
               className={[
                 'tm-assistant-row',
@@ -67,28 +82,47 @@ export function TranslationSidebarSections(props: Props) {
                 type="button"
                 className="tm-assistant-expand"
                 aria-label={isOpen ? t('common.collapse') : t('common.expand')}
-                onClick={() => toggleExpanded(section.id)}
+                onClick={() => toggleExpanded(folder.id)}
               >
                 <IconChevronRight open={isOpen} />
               </button>
-              <button
-                type="button"
-                className={[
-                  'tm-assistant-name',
-                  isSectionActive ? 'tm-assistant-name--active' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                onClick={() => handleSectionClick(section.id)}
-              >
-                {sectionLabel}
-              </button>
+              {isRenamingFolder ? (
+                <SidebarRenameInput
+                  value={folder.name}
+                  className="tm-sidebar-rename-input"
+                  onCommit={(next) => {
+                    onRenameFolder(folder.id, normalizeRenameTitle(next, folder.name))
+                    onCancelRenameFolder()
+                  }}
+                  onCancel={onCancelRenameFolder}
+                />
+              ) : (
+                <button
+                  type="button"
+                  className={[
+                    'tm-assistant-name',
+                    folder.isDefault ? 'tm-assistant-name--default' : '',
+                    isSectionActive ? 'tm-assistant-name--active' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  onClick={() => handleSectionClick(folder.id)}
+                  onDoubleClick={(event) => {
+                    event.preventDefault()
+                    onStartRenameFolder(folder.id)
+                  }}
+                  onContextMenu={(event) => handleFolderContextMenu(event, folder)}
+                  title={folder.name}
+                >
+                  {folder.name}
+                </button>
+              )}
               <div className="tm-assistant-actions">
                 <button
                   type="button"
                   className="tm-assistant-action-btn"
-                  aria-label={t('translationPage.sidebar.newDocument')}
-                  onClick={handleOpenDocument}
+                  aria-label={t('translationPage.sidebar.openDocument')}
+                  onClick={() => handleOpenDocument(folder.id)}
                 >
                   <IconPlus size={14} />
                 </button>
@@ -97,8 +131,8 @@ export function TranslationSidebarSections(props: Props) {
 
             {isOpen ? (
               <div className="tm-assistant-sessions">
-                {documents.length > 0 ? (
-                  documents.map((document) => (
+                {folderDocuments.length > 0 ? (
+                  folderDocuments.map((document) => (
                     <TranslationSidebarDocumentItem
                       key={document.id}
                       document={document}
@@ -122,9 +156,7 @@ export function TranslationSidebarSections(props: Props) {
         )
       })}
 
-      {!TRANSLATION_SIDEBAR_SECTIONS.length ? (
-        <div className="tm-empty">{configEmptyHint}</div>
-      ) : null}
+      {folders.length === 0 ? <div className="tm-empty">{configEmptyHint}</div> : null}
     </div>
   )
 }

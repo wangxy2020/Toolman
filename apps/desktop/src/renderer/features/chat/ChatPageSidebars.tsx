@@ -15,6 +15,7 @@ import {
   FILE_DEDUP_TOOL_ID,
   FILE_REGISTRY_TOOL_ID,
 } from '../knowledge/knowledge-sidebar-types'
+import { updateAssistantName } from './chat-page-handlers'
 import { useChatPageSidebars, type ChatPageSidebarsProps } from './useChatPageSidebars'
 
 export type { ChatPageSidebarsProps }
@@ -53,8 +54,9 @@ export function ChatPageSidebars(props: ChatPageSidebarsProps) {
     handleSelectKnowledgeSection,
     handleSelectCommunitySection,
     handleSelectDocument,
+    handleCreateFolder,
+    handleDeleteFolder,
     handleDeleteDocument,
-    handleAddDocumentToNotes,
     handleAddDocumentToKnowledge,
     handleOpenDocument,
   } = useChatPageSidebars(props)
@@ -72,6 +74,16 @@ export function ChatPageSidebars(props: ChatPageSidebarsProps) {
         onCreateSession={(assistantId) => void chat.createSession(assistantId)}
         onRenameSession={(id, title) => void chat.renameSession(id, title)}
         onDeleteSession={(id) => void chat.deleteSession(id)}
+        onRenameAssistant={(id, name) => {
+          void (async () => {
+            const result = await updateAssistantName(id, name)
+            if (!result.ok) {
+              chat.setError(result.error)
+              return
+            }
+            await chat.loadAssistants()
+          })()
+        }}
         onDeleteAssistant={(id) => void handleDeleteAssistant(id)}
         onAddAssistant={() => setShowAssistants(true)}
       />
@@ -113,6 +125,7 @@ export function ChatPageSidebars(props: ChatPageSidebarsProps) {
         onSelectSection={handleSelectKnowledgeSection}
         onCreate={() => setShowKnowledgeCreate(true)}
         onDelete={(id) => void knowledge.remove(id)}
+        onRenamed={() => void knowledge.load()}
       />
     )
   }
@@ -160,6 +173,7 @@ export function ChatPageSidebars(props: ChatPageSidebarsProps) {
       <TranslationSidebar
         activeSection={translationSection}
         onSelectSection={setTranslationSection}
+        folders={translation.folders}
         documents={translation.documents}
         activeDocumentId={translation.activeDocumentId}
         renameDocumentId={translation.renameDocumentId}
@@ -168,8 +182,10 @@ export function ChatPageSidebars(props: ChatPageSidebarsProps) {
         onRenameDocument={translation.renameDocument}
         onCancelRenameDocument={translation.cancelRenameDocument}
         onDeleteDocument={handleDeleteDocument}
-        onAddDocumentToNotes={handleAddDocumentToNotes}
         onAddDocumentToKnowledge={handleAddDocumentToKnowledge}
+        onCreateFolder={handleCreateFolder}
+        onRenameFolder={translation.renameFolder}
+        onDeleteFolder={handleDeleteFolder}
         onOpenDocument={handleOpenDocument}
       />
     )

@@ -75,11 +75,15 @@ export function useKnowledgeBaseSettingsFormFields(
   kb: KnowledgeBase,
   resolvedDefaultEmbeddingRef: string,
   defaultDocProcessorProviderId: string | undefined,
+  defaultAnalysisModelId = '',
 ) {
   const initial = getInitialFormState(kb)
   const [name, setName] = useState(initial.name)
   const [description, setDescription] = useState(initial.description)
   const [embeddingRef, setEmbeddingRef] = useState('')
+  const [analysisModelId, setAnalysisModelId] = useState(
+    initial.analysisModelId || defaultAnalysisModelId,
+  )
   const [docProcessorProviderId, setDocProcessorProviderId] = useState(initial.docProcessorProviderId)
   const [rerankRef, setRerankRef] = useState('')
   const [chunkSize, setChunkSize] = useState(initial.chunkSize)
@@ -97,6 +101,7 @@ export function useKnowledgeBaseSettingsFormFields(
     setName(next.name)
     setDescription(next.description)
     setEmbeddingRef(resolveEmbeddingRef(kb.embedConfig, resolvedDefaultEmbeddingRef))
+    setAnalysisModelId(next.analysisModelId || defaultAnalysisModelId)
     setDocProcessorProviderId(next.docProcessorProviderId)
     setRerankRef(resolveRerankRef(kb.embedConfig))
     setChunkSize(next.chunkSize)
@@ -108,7 +113,7 @@ export function useKnowledgeBaseSettingsFormFields(
     setUrlRefreshIntervalHours(next.urlRefreshIntervalHours)
     setScoreThreshold(next.scoreThreshold)
     setVectorBackend(next.vectorBackend)
-  }, [kb.id, kb.updatedAt, resolvedDefaultEmbeddingRef])
+  }, [kb.id, kb.updatedAt, resolvedDefaultEmbeddingRef, defaultAnalysisModelId])
 
   useEffect(() => {
     if (kb.embedConfig.docProcessorProviderId) return
@@ -122,6 +127,11 @@ export function useKnowledgeBaseSettingsFormFields(
     }
   }, [embeddingRef, resolvedDefaultEmbeddingRef])
 
+  useEffect(() => {
+    if (!defaultAnalysisModelId) return
+    setAnalysisModelId((current) => current || defaultAnalysisModelId)
+  }, [defaultAnalysisModelId])
+
   return {
     name,
     setName,
@@ -129,6 +139,8 @@ export function useKnowledgeBaseSettingsFormFields(
     setDescription,
     embeddingRef,
     setEmbeddingRef,
+    analysisModelId,
+    setAnalysisModelId,
     docProcessorProviderId,
     setDocProcessorProviderId,
     rerankRef,

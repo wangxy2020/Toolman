@@ -25,7 +25,7 @@ export const knowledgePageEn = {
     localFiles: 'Local files',
     fileTools: 'File tools',
   },
-  toolbar: { chatWithFiles: 'Chat with knowledge files' },
+  toolbar: { chatWithFiles: 'Ask', translateWithFiles: 'Translate' },
   sort: { createdAt: 'Created', size: 'Size', fileName: 'File name' },
   settings: {
     titleLocal: 'Local knowledge settings',
@@ -47,6 +47,10 @@ export const knowledgePageEn = {
     storageDir: 'Storage directory',
     openInFinder: 'Reveal in Finder',
     embedModel: 'Embedding model',
+    embedModelHint: 'Converts documents into vectors. Changing it requires rebuilding the index.',
+    analysisModel: 'Analysis model',
+    analysisModelHint:
+      'Used when chatting via “Ask” to switch the agent model, and for document understanding (e.g. scans). Prefer a vision-capable model for scanned PDFs. If unset, the current agent model is kept.',
     noModel: 'No model',
     includeRules: 'Include rules',
     excludeRules: 'Exclude rules',

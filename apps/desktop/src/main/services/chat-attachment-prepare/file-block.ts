@@ -34,6 +34,7 @@ import {
   isLikelyTextFile,
   truncateForChat,
 } from './constants'
+import { tryKnowledgeIndexedText } from './knowledge-indexed-text'
 
 async function renderPdfVisionPages(
   readPath: string,
@@ -147,6 +148,19 @@ export async function preparePdfBlock(
 
   options.onStatus?.(`正在提取「${fileName}」文本…`)
 
+  // Prefer already-ingested KB chunk text. Lookup must use the original source path
+  // (`block.path`), not the blob cache path from `resolveAttachmentReadPath` — registry
+  // rows are keyed by the knowledge-library file path.
+  const sourcePath = block.path?.trim()
+  const indexedText =
+    (
+      (sourcePath ? tryKnowledgeIndexedText(sourcePath, options.workspaceId) : null) ??
+      tryKnowledgeIndexedText(readPath, options.workspaceId)
+    )?.trim() ?? ''
+  if (indexedText && !isPdfExtractedTextInsufficient(indexedText, 1)) {
+    return { ...block, content: indexedText, delivery: 'text' }
+  }
+
   if (options.workspaceId && shouldUseOpenDataLoaderForPdf(readPath)) {
     try {
       const parsed = await withAbortSignal(
@@ -202,7 +216,7 @@ export async function preparePdfBlock(
   }
 
   throw new Error(
-    `「${fileName}」未能提取到可用文本。请改用支持视觉的模型（如 gemma4:26b），或将扫描件先导入知识库。`,
+    `「${fileName}」未能提取到可用文本。请在知识库「基础与模型」中配置支持视觉的分析模型（如 gemma4:26b），或确认扫描件已成功导入知识库。`,
   )
 }
 
@@ -243,7 +257,7 @@ export async function prepareFileBlock(
 
   if (kind === 'image') {
     if (!supportsVision) {
-      throw new Error(`「${fileName}」是图片，请切换到支持视觉的模型（如 gemma4:26b、deepseek-v4-pro）后重试。`)
+      throw new Error(`「${fileName}」是图片，请切换到支持视觉的模型（如 gemma4:26b、deepseek-flash）后重试。`)
     }
     if (!block.blobHash?.trim()) {
       throw new Error(`图片「${fileName}」尚未就绪，请重新发送。`)
@@ -255,6 +269,17 @@ export async function prepareFileBlock(
       path: block.path,
       alt: fileName,
     }
+  }
+
+  // Prefer already-ingested KB chunk text for any file kind (not only PDF).
+  const sourcePath = block.path?.trim()
+  const indexedText =
+    (
+      (sourcePath ? tryKnowledgeIndexedText(sourcePath, options.workspaceId) : null) ??
+      tryKnowledgeIndexedText(readPath, options.workspaceId)
+    )?.trim() ?? ''
+  if (indexedText && !isPdfExtractedTextInsufficient(indexedText, 1)) {
+    return { ...block, content: indexedText, delivery: 'text' }
   }
 
   if (isLikelyTextFile(fileName) && kind !== 'pdf') {

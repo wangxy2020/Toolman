@@ -153,7 +153,9 @@ export async function appendRuntimeContextHints(
     hints.push(courseHint)
   }
 
-  if (!hasInlineAttachment && options.sendOptions?.kbEnabled === true && options.runtime.workspaceId) {
+  // KB vector retrieval stays on even with inline attachments (e.g. 去提问).
+  // Attachments provide document context; RAG still supplies query-scoped chunks.
+  if (options.sendOptions?.kbEnabled === true && options.runtime.workspaceId) {
     const kbIds = resolveEffectiveKbIds({
       workspaceId: options.runtime.workspaceId,
       assistant: options.assistant,

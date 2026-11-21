@@ -64,11 +64,11 @@ export const MODULE_PAGE_CONFIG: Record<ModuleView, ModulePageConfig> = {
   },
   translate: {
     title: '翻译',
-    addLabel: '打开文档',
+    addLabel: '新建文件夹',
     headerSegments: ['文档翻译'],
-    sidebarEmptyHint: '暂无文档记录，点击上方打开',
+    sidebarEmptyHint: '暂无文件夹，点击上方新建',
     contentEmptyTitle: '翻译',
-    contentEmptyHint: '在左侧打开文档，在右侧查看原文与译文。',
+    contentEmptyHint: '在左侧文件夹中打开文档，在右侧查看原文与译文。',
   },
   'assistant-lib': {
     title: '课堂',

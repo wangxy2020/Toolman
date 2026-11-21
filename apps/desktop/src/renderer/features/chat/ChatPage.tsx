@@ -54,7 +54,6 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
             <ChatPageSidebars
               showContentSidebar={page.showContentSidebar}
               activeView={page.activeView}
-              setActiveView={page.setActiveView}
               sidebarAssistants={page.sidebarAssistants}
               activeAssistant={page.activeAssistant}
               chat={page.chat}
@@ -123,6 +122,7 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
               syncKnowledgeFolder={page.syncKnowledgeFolder}
               handleOpenNote={page.handleOpenNote}
               handleChatWithKnowledgeFiles={page.handleChatWithKnowledgeFiles}
+              handleTranslateWithKnowledgeFiles={page.handleTranslateWithKnowledgeFiles}
               handleChatWithNote={page.handleChatWithNote}
               setNotesIngestTarget={page.setNotesIngestTarget}
               p2pWorkspaces={page.p2pWorkspaces}

@@ -1,6 +1,7 @@
 import { useCallback, type MutableRefObject } from 'react'
 
 import { DialogSelectFilesOutputSchema, FileReadBinaryOutputSchema, IpcChannel } from '@toolman/shared'
+import { fileBinaryToBase64 } from '../../../../lib/file-binary-payload'
 import { useI18n } from '../../../../i18n/useI18n'
 import { usePmStatusFeedback } from '../../usePmStatusFeedback'
 import { COST_IMPORT_DIALOG_FILTERS, importCostCatalogFromFile } from './pm-cost-import'
@@ -75,7 +76,7 @@ export function useProjectCostTableImport(args: {
     try {
       const imported = await importCostCatalogFromFile({
         fileName: binary.fileName,
-        base64: binary.base64,
+        base64: fileBinaryToBase64(binary),
         applicable: viewApplicable,
         fallbackType: addType,
       })

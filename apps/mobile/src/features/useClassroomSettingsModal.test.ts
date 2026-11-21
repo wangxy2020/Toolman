@@ -11,21 +11,21 @@ const config: ModelConfig = {
   providerId: 'deepseek',
   baseUrl: 'https://api.deepseek.com/v1',
   apiKey: 'sk-test',
-  model: 'deepseek-v4-flash',
+  model: 'deepseek-flash',
   localModelEnabled: false,
 }
 
 describe('course model options', () => {
   it('labels the settings default model and lists suggested models for that provider', () => {
     expect(mobileDefaultCourseModelOptionLabel(config)).toBe(
-      '使用默认模型（深度求索 / deepseek-v4-flash）',
+      '使用默认模型（深度求索 / deepseek-flash）',
     )
     const options = listMobileCourseModelOptions(config)
     expect(options.map((item) => item.modelId)).toEqual(
-      expect.arrayContaining(['deepseek:deepseek-v4-flash', 'deepseek:deepseek-v4-pro']),
+      expect.arrayContaining(['deepseek:deepseek-flash', 'deepseek:deepseek-v4-pro']),
     )
     expect(resolveSelectedCourseModelLabel('', options, mobileDefaultCourseModelOptionLabel(config))).toBe(
-      '跟随默认（深度求索 / deepseek-v4-flash）',
+      '跟随默认（深度求索 / deepseek-flash）',
     )
     expect(
       resolveSelectedCourseModelLabel('deepseek:deepseek-v4-pro', options, '使用默认模型'),

@@ -19,6 +19,7 @@ export interface SettingsFormValues {
   name: string
   description: string
   embeddingRef: string
+  analysisModelId: string
   docProcessorProviderId: string
   rerankRef: string
   chunkSize: string
@@ -142,6 +143,7 @@ export function validateAndBuildUpdatePayload(
   const embedConfig: Partial<KnowledgeBase['embedConfig']> = {
     embedProviderId: embeddingSelection.providerId || null,
     embedModelId: embeddingSelection.modelId,
+    analysisModelId: values.analysisModelId.trim() || null,
     rerankProviderId: rerankSelection?.providerId || null,
     rerankModelId: rerankSelection?.modelId || null,
     ...(isLocalKb ? { docProcessorProviderId: storedDocProcessorProviderId } : {}),

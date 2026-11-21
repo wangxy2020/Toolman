@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { IpcChannel, type Provider } from '@toolman/shared'
+import { buildModelOptions } from '../chat/model-utils'
 import { listEnabledModels } from '../settings/provider-model-utils'
 
 export interface KnowledgeModelOption {
@@ -99,10 +100,21 @@ export function useKnowledgeSettingsModels(workspaceId: string) {
     return embeddingModels[0]?.value ?? ''
   }, [embeddingModels])
 
+  const chatModels = useMemo(
+    () =>
+      buildModelOptions(providers).map((option) => ({
+        value: option.modelId,
+        label: option.label,
+      })),
+    [providers],
+  )
+
   return {
     loading,
+    providers,
     embeddingModels,
     rerankModels,
+    chatModels,
     docProcessorProviders,
     defaultDocProcessorProviderId,
     defaultEmbeddingRef,

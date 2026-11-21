@@ -142,6 +142,9 @@ importers:
       mysql2:
         specifier: ^3.24.3
         version: 3.24.3(@types/node@25.9.3)
+      pdfjs-dist:
+        specifier: '>=6.2.108 <7'
+        version: 6.2.108
       pg:
         specifier: ^8.23.0
         version: 8.23.0
@@ -2001,6 +2004,7 @@ packages:
   '@lancedb/lancedb@0.17.0':
     resolution: {integrity: sha512-AgQ4dqHBjoEpVdND5tmzhy0OJxwP4gJnEjOz3jVh7ip+8EYhR44wO6XbEhpxvvGfXyyepDrulo3bpL1323eNSg==}
     engines: {node: '>= 18'}
+    cpu: [x64, arm64]
     os: [darwin, linux, win32]
     peerDependencies:
       apache-arrow: '>=15.0.0 <=18.1.0'
@@ -9661,7 +9665,9 @@ snapshots:
       metro-runtime: 0.84.4
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
 
   '@react-native/normalize-colors@0.74.89': {}
 

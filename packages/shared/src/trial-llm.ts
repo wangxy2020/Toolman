@@ -2,7 +2,7 @@
 
 export const TRIAL_DEEPSEEK_API_KEY_ENV = 'TOOLMAN_TRIAL_DEEPSEEK_API_KEY'
 export const TRIAL_DEEPSEEK_PROVIDER_ID = 'deepseek'
-export const TRIAL_DEEPSEEK_MODEL = 'deepseek-v4-flash'
+export const TRIAL_DEEPSEEK_MODEL = 'deepseek-flash'
 export const TRIAL_DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1'
 export const TRIAL_LLM_MONTHLY_TOKEN_CAP = 200_000
 export const TRIAL_LLM_MONTHLY_CONVERSATION_CAP = 50

@@ -13,6 +13,7 @@ type ChatPageKnowledgeViewProps = Pick<
   | 'systemPaths'
   | 'handleOpenNote'
   | 'handleChatWithKnowledgeFiles'
+  | 'handleTranslateWithKnowledgeFiles'
 >
 
 export function ChatPageKnowledgeView({
@@ -26,6 +27,7 @@ export function ChatPageKnowledgeView({
   systemPaths,
   handleOpenNote,
   handleChatWithKnowledgeFiles,
+  handleTranslateWithKnowledgeFiles,
 }: ChatPageKnowledgeViewProps) {
   return (
     <KnowledgePage
@@ -59,7 +61,16 @@ export function ChatPageKnowledgeView({
       onSyncKnowledgeFolderError={syncKnowledgeFolder.setError}
       systemPaths={systemPaths}
       onOpenNote={handleOpenNote}
-      onChatWithKnowledgeFiles={(items) => void handleChatWithKnowledgeFiles(items)}
+      onChatWithKnowledgeFiles={
+        handleChatWithKnowledgeFiles
+          ? (items, knowledgeBase) => void handleChatWithKnowledgeFiles(items, knowledgeBase)
+          : undefined
+      }
+      onTranslateWithKnowledgeFiles={
+        handleTranslateWithKnowledgeFiles
+          ? (items, knowledgeBase) => handleTranslateWithKnowledgeFiles(items, knowledgeBase)
+          : undefined
+      }
     />
   )
 }

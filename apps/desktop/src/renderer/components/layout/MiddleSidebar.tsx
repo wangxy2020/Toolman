@@ -7,6 +7,7 @@ import {
 } from '@toolman/shared'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { IconChevronRight, IconPlus, IconTopic } from '../icons'
+import { AgentSidebarContextMenu } from '../../features/chat/AgentSidebarContextMenu'
 import { SidebarRenameInput } from '../../features/notes/SidebarRenameInput'
 import { isGroupProxyAssistant, resolveGroupProxyAssistantDisplayName } from '../../features/group/group-agent-utils'
 import {
@@ -26,6 +27,7 @@ interface Props {
   onCreateSession: (assistantId?: string) => void
   onRenameSession: (id: string, title: string) => void
   onDeleteSession: (id: string) => void
+  onRenameAssistant: (id: string, name: string) => void
   onDeleteAssistant: (id: string) => void
   onAddAssistant: () => void
 }
@@ -40,9 +42,17 @@ function resolveAssistantSidebarName(assistant: Assistant, t: ReturnType<typeof 
   return translateAssistantName(assistant.name, t)
 }
 
-function normalizeSessionTitle(next: string, fallback: string): string {
+function normalizeTitle(next: string, fallback: string): string {
   const trimmed = next.trim()
   return trimmed || fallback
+}
+
+function canRenameAssistant(assistant: Assistant): boolean {
+  return !isGroupProxyAssistant(assistant) && !isAutomationAssistantName(assistant.name)
+}
+
+function canDeleteAssistant(assistant: Assistant): boolean {
+  return !assistant.isBuiltin
 }
 
 function groupSessions(sessions: Session[], assistants: Assistant[]) {
@@ -87,6 +97,7 @@ export function MiddleSidebar({
   onCreateSession,
   onRenameSession,
   onDeleteSession,
+  onRenameAssistant,
   onDeleteAssistant,
   onAddAssistant,
 }: Props) {
@@ -112,8 +123,19 @@ export function MiddleSidebar({
 
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [renameSessionId, setRenameSessionId] = useState<string | null>(null)
+  const [renameAssistantId, setRenameAssistantId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Session | null>(null)
   const [deleteAssistantTarget, setDeleteAssistantTarget] = useState<Assistant | null>(null)
+  const [sessionContextMenu, setSessionContextMenu] = useState<{
+    x: number
+    y: number
+    session: Session
+  } | null>(null)
+  const [assistantContextMenu, setAssistantContextMenu] = useState<{
+    x: number
+    y: number
+    assistant: Assistant
+  } | null>(null)
 
   useEffect(() => {
     if (!activeAssistantId) return
@@ -146,7 +168,7 @@ export function MiddleSidebar({
           value={session.title}
           className="tm-sidebar-rename-input tm-sidebar-rename-input--note"
           onCommit={(next) => {
-            onRenameSession(session.id, normalizeSessionTitle(next, session.title))
+            onRenameSession(session.id, normalizeTitle(next, session.title))
             setRenameSessionId(null)
           }}
           onCancel={() => setRenameSessionId(null)}
@@ -168,11 +190,17 @@ export function MiddleSidebar({
         onClick={() => onSelectSession(session.id)}
         onDoubleClick={(event) => {
           event.preventDefault()
+          setRenameAssistantId(null)
           setRenameSessionId(session.id)
         }}
-        onContextMenu={(e) => {
-          e.preventDefault()
-          setDeleteTarget(session)
+        onContextMenu={(event) => {
+          event.preventDefault()
+          setAssistantContextMenu(null)
+          setSessionContextMenu({
+            x: event.clientX,
+            y: event.clientY,
+            session,
+          })
         }}
         title={displayTitle}
       >
@@ -208,6 +236,8 @@ export function MiddleSidebar({
             )
             const isOpen = expanded.has(assistant.id)
             const isActive = assistant.id === activeAssistantId
+            const isRenamingAssistant = renameAssistantId === assistant.id
+            const displayName = resolveAssistantSidebarName(assistant, t)
 
             return (
               <div key={assistant.id} className="tm-assistant-group">
@@ -228,24 +258,46 @@ export function MiddleSidebar({
                   >
                     <IconChevronRight open={isOpen} />
                   </button>
-                  <button
-                    type="button"
-                    className={[
-                      'tm-assistant-name',
-                      isActive ? 'tm-assistant-name--active' : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' ')}
-                    onClick={() => toggleExpanded(assistant.id)}
-                    onContextMenu={(e) => {
-                      e.preventDefault()
-                      if (!assistant.isBuiltin) {
-                        setDeleteAssistantTarget(assistant)
-                      }
-                    }}
-                  >
-                    {resolveAssistantSidebarName(assistant, t)}
-                  </button>
+                  {isRenamingAssistant ? (
+                    <SidebarRenameInput
+                      value={assistant.name}
+                      className="tm-sidebar-rename-input"
+                      onCommit={(next) => {
+                        onRenameAssistant(assistant.id, normalizeTitle(next, assistant.name))
+                        setRenameAssistantId(null)
+                      }}
+                      onCancel={() => setRenameAssistantId(null)}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className={[
+                        'tm-assistant-name',
+                        isActive ? 'tm-assistant-name--active' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      onClick={() => toggleExpanded(assistant.id)}
+                      onDoubleClick={(event) => {
+                        if (!canRenameAssistant(assistant)) return
+                        event.preventDefault()
+                        setRenameSessionId(null)
+                        setRenameAssistantId(assistant.id)
+                      }}
+                      onContextMenu={(event) => {
+                        event.preventDefault()
+                        if (!canRenameAssistant(assistant) && !canDeleteAssistant(assistant)) return
+                        setSessionContextMenu(null)
+                        setAssistantContextMenu({
+                          x: event.clientX,
+                          y: event.clientY,
+                          assistant,
+                        })
+                      }}
+                    >
+                      {displayName}
+                    </button>
+                  )}
                   <div className="tm-assistant-actions">
                     {!isGroupProxyAssistant(assistant) &&
                     !isAutomationAssistantName(assistant.name) ? (
@@ -285,6 +337,36 @@ export function MiddleSidebar({
           )}
         </div>
       </div>
+
+      {sessionContextMenu ? (
+        <AgentSidebarContextMenu
+          x={sessionContextMenu.x}
+          y={sessionContextMenu.y}
+          canRename
+          canDelete
+          onClose={() => setSessionContextMenu(null)}
+          onRename={() => {
+            setRenameAssistantId(null)
+            setRenameSessionId(sessionContextMenu.session.id)
+          }}
+          onDelete={() => setDeleteTarget(sessionContextMenu.session)}
+        />
+      ) : null}
+
+      {assistantContextMenu ? (
+        <AgentSidebarContextMenu
+          x={assistantContextMenu.x}
+          y={assistantContextMenu.y}
+          canRename={canRenameAssistant(assistantContextMenu.assistant)}
+          canDelete={canDeleteAssistant(assistantContextMenu.assistant)}
+          onClose={() => setAssistantContextMenu(null)}
+          onRename={() => {
+            setRenameSessionId(null)
+            setRenameAssistantId(assistantContextMenu.assistant.id)
+          }}
+          onDelete={() => setDeleteAssistantTarget(assistantContextMenu.assistant)}
+        />
+      ) : null}
 
       {deleteTarget && (
         <ConfirmDialog

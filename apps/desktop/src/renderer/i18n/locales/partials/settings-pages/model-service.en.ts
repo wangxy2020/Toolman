@@ -126,7 +126,7 @@ export const settingsPagesModelServiceEn = {
       title: 'Add Model',
       idLabel: 'Model ID',
       idHelp: 'Unique identifier used by the API',
-      idPlaceholderDeepseek: 'e.g. deepseek-v4-flash or deepseek-v4-pro',
+      idPlaceholderDeepseek: 'e.g. deepseek-flash or deepseek-v4-pro',
       idPlaceholder: 'Required, e.g. gpt-3.5-turbo',
       nameLabel: 'Model name',
       nameHelp: 'Display name shown in the UI',
@@ -138,7 +138,7 @@ export const settingsPagesModelServiceEn = {
       submit: 'Add model',
       errors: {
         idRequired: 'Please enter a model ID',
-        deepseekUnsupported: 'DeepSeek supports: deepseek-v4-flash, deepseek-v4-pro',
+        deepseekUnsupported: 'DeepSeek supports: deepseek-flash (vision), deepseek-v4-pro (text-only)',
         addFailed: 'Failed to add model',
       },
     },

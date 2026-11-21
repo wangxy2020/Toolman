@@ -14,11 +14,11 @@ export const PDF_PREVIEW_PREFETCH_AHEAD = 1
 export const PDF_PREVIEW_PREFETCH_BEHIND = 1
 export const PDF_PREVIEW_ACTIVE_RADIUS = 1
 /** First paint = readable frame (text + scan). */
-export const PDF_PREVIEW_FAST_MAX_WIDTH = 720
-/** Settled / focused upgrade (device pixels). */
-export const PDF_PREVIEW_MAX_RENDER_WIDTH = 1440
-export const PDF_PREVIEW_MAX_DPR = 2
-export const PDF_PREVIEW_SHARP_MIN_BOOST = 1.75
+export const PDF_PREVIEW_FAST_MAX_WIDTH = 960
+/** Settled / focused upgrade (device pixels) — closer to browser PDF viewers. */
+export const PDF_PREVIEW_MAX_RENDER_WIDTH = 2880
+export const PDF_PREVIEW_MAX_DPR = 3
+export const PDF_PREVIEW_SHARP_MIN_BOOST = 2
 /** Short settle so neighbor readable can enqueue first without a long blank wait. */
 export const PDF_PREVIEW_SHARP_DELAY_MS = 120
 export type PdfPreviewPrefetchExtent = 'none' | 'near' | 'far'

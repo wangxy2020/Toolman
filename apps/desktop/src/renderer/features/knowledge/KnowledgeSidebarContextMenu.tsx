@@ -5,11 +5,22 @@ import { useI18n } from '../../i18n/useI18n'
 interface Props {
   x: number
   y: number
+  canRename?: boolean
+  canDelete?: boolean
   onClose: () => void
-  onDelete: () => void
+  onRename?: () => void
+  onDelete?: () => void
 }
 
-export function KnowledgeSidebarContextMenu({ x, y, onClose, onDelete }: Props) {
+export function KnowledgeSidebarContextMenu({
+  x,
+  y,
+  canRename = false,
+  canDelete = true,
+  onClose,
+  onRename,
+  onDelete,
+}: Props) {
   const { t } = useI18n()
 
   useEffect(() => {
@@ -20,6 +31,8 @@ export function KnowledgeSidebarContextMenu({ x, y, onClose, onDelete }: Props) 
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [onClose])
 
+  if (!canRename && !canDelete) return null
+
   return createPortal(
     <>
       <button
@@ -29,20 +42,35 @@ export function KnowledgeSidebarContextMenu({ x, y, onClose, onDelete }: Props) 
         onClick={onClose}
       />
       <div className="tm-group-context-menu" style={{ top: y, left: x }} role="menu">
-        <button
-          type="button"
-          className={[
-            'tm-group-context-menu-item',
-            'tm-group-context-menu-item--danger',
-          ].join(' ')}
-          role="menuitem"
-          onClick={() => {
-            onDelete()
-            onClose()
-          }}
-        >
-          {t('common.delete')}
-        </button>
+        {canRename && onRename ? (
+          <button
+            type="button"
+            className="tm-group-context-menu-item"
+            role="menuitem"
+            onClick={() => {
+              onRename()
+              onClose()
+            }}
+          >
+            {t('sidebar.knowledge.rename')}
+          </button>
+        ) : null}
+        {canDelete && onDelete ? (
+          <button
+            type="button"
+            className={[
+              'tm-group-context-menu-item',
+              'tm-group-context-menu-item--danger',
+            ].join(' ')}
+            role="menuitem"
+            onClick={() => {
+              onDelete()
+              onClose()
+            }}
+          >
+            {t('common.delete')}
+          </button>
+        ) : null}
       </div>
     </>,
     document.body,

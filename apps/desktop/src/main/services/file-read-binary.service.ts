@@ -66,7 +66,7 @@ export async function readFileBinary(input: unknown) {
       FileReadBinaryOutputSchema.parse({
         fileName: basename(filePath),
         mimeType: mimeTypeForPath(filePath),
-        base64: buffer.toString('base64'),
+        bytes: buffer,
         byteLength: buffer.byteLength,
       }),
     )

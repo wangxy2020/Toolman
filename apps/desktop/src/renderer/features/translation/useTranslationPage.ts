@@ -19,8 +19,16 @@ import {
   aggregateSnapshotSourceText,
   aggregateSnapshotTargetText,
 } from './document-page-snapshots'
-import type { TranslationContrastItem, TranslationDocumentItem, TranslationDocumentPageSnapshot } from './translation-storage'
-import type { TranslationSidebarSection } from './translation-sidebar-types'
+import type {
+  TranslationContrastItem,
+  TranslationDocumentItem,
+  TranslationDocumentPageSnapshot,
+  TranslationFolderItem,
+} from './translation-storage'
+import {
+  isTranslationDocumentsSection,
+  type TranslationSidebarSection,
+} from './translation-sidebar-types'
 import { useTranslationSettings } from './useTranslationSettings'
 import { useTranslationPageActions } from './useTranslationPageActions'
 import { useTranslationPageRecordSync } from './useTranslationPageRecordSync'
@@ -28,6 +36,7 @@ import { useTranslationPageRecordSync } from './useTranslationPageRecordSync'
 export interface TranslationPageProps {
   workspaceId: string | null
   section: TranslationSidebarSection
+  folders?: TranslationFolderItem[]
   providers: Provider[]
   translationLanguages?: [TranslationLanguage, TranslationLanguage]
   activeContrast: TranslationContrastItem | null
@@ -35,7 +44,7 @@ export interface TranslationPageProps {
   onSaveContrast: (input: SaveTranslationContrastInput) => string | null
   onSaveDocument: (input: SaveTranslationDocumentInput) => string | null
   onSaveDocumentToNotes?: (title: string, content: string) => void
-  onOpenDocumentPath: (filePath: string) => void
+  onOpenDocumentPath: (filePath: string, folderId?: string) => void
   onUpdateDocumentSourceText: (documentId: string, sourceText: string) => void
   onUpdateDocumentPageSnapshots?: (
     documentId: string,
@@ -50,6 +59,7 @@ export interface TranslationPageProps {
 export function useTranslationPage({
   workspaceId,
   section,
+  folders = [],
   providers,
   translationLanguages,
   activeContrast,
@@ -67,7 +77,7 @@ export function useTranslationPage({
   const { t } = useI18n()
   const { settings, updateSettings } = useTranslationSettings()
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const isDocuments = section === 'documents'
+  const isDocuments = isTranslationDocumentsSection(section)
 
   const [languages, setLanguages] = useState<[TranslationLanguage, TranslationLanguage]>(() =>
     normalizeTranslationLanguages(
@@ -236,7 +246,11 @@ export function useTranslationPage({
     t,
   })
 
-  const sectionLabel = t(`translationPage.sections.${section}`)
+  const sectionLabel =
+    folders.find((folder) => folder.id === section)?.name ??
+    (section === 'contrast'
+      ? t('translationPage.sections.contrast')
+      : t('translationPage.sections.documents'))
 
   const modelId = useMemo(
     () =>
@@ -313,6 +327,7 @@ export function useTranslationPage({
     onSaveDocument,
     onSaveDocumentToNotes,
     onOpenDocumentPath,
+    openDocumentFolderId: section,
     onClearActiveDocument,
     onResetDocumentContent,
     cancelSnapshotsPersist,

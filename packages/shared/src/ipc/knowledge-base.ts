@@ -22,6 +22,11 @@ export const KnowledgeEmbedConfigSchema = z.object({
   rerankProviderId: z.string().nullable().optional(),
   rerankModelId: z.string().nullable().optional(),
   docProcessorProviderId: z.string().nullable().optional(),
+  /**
+   * Chat/analysis model for KB Q&A / chat-with-files (`providerId:modelName`).
+   * Null/empty = keep the current agent model (no automatic fallback).
+   */
+  analysisModelId: z.string().nullable().optional(),
   scoreThreshold: z.number().min(0).max(1).optional(),
   /** 向量存储后端：file=JSON 文件，lance=LanceDB */
   vectorBackend: z.enum(['file', 'lance']).default('file'),

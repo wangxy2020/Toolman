@@ -16,8 +16,11 @@ type Props = Pick<
   | 'setDescription'
   | 'embeddingRef'
   | 'setEmbeddingRef'
+  | 'analysisModelId'
+  | 'setAnalysisModelId'
   | 'modelsLoading'
   | 'embeddingOptions'
+  | 'chatModels'
   | 'submitting'
   | 'kbStoragePath'
   | 'handleOpenStorageInFinder'
@@ -37,8 +40,11 @@ export function KnowledgeBaseSettingsBasicTab(props: Props) {
     setDescription,
     embeddingRef,
     setEmbeddingRef,
+    analysisModelId,
+    setAnalysisModelId,
     modelsLoading,
     embeddingOptions,
+    chatModels,
     submitting,
     kbStoragePath,
     handleOpenStorageInFinder,
@@ -100,28 +106,53 @@ export function KnowledgeBaseSettingsBasicTab(props: Props) {
       ) : null}
 
       {isVectorizedKb ? (
-        <div className="tm-kb-settings-row">
-          <FormLabel hint="用于将文档内容转换为向量，修改后需重建索引。">
-            {t('knowledgePage.settings.embedModel')}
-          </FormLabel>
-          <select
-            id="kb-settings-embedding"
-            className="tm-kb-settings-input"
-            value={embeddingRef}
-            onChange={(event) => setEmbeddingRef(event.target.value)}
-            disabled={modelsLoading}
-          >
-            {embeddingOptions.length === 0 ? (
-              <option value="">{t('knowledgePage.settings.noModel')}</option>
-            ) : (
-              embeddingOptions.map((model) => (
-                <option key={model.value} value={model.value}>
-                  {model.label}
-                </option>
-              ))
-            )}
-          </select>
-        </div>
+        <>
+          <div className="tm-kb-settings-row">
+            <FormLabel hint={t('knowledgePage.settings.embedModelHint')}>
+              {t('knowledgePage.settings.embedModel')}
+            </FormLabel>
+            <select
+              id="kb-settings-embedding"
+              className="tm-kb-settings-input"
+              value={embeddingRef}
+              onChange={(event) => setEmbeddingRef(event.target.value)}
+              disabled={modelsLoading}
+            >
+              {embeddingOptions.length === 0 ? (
+                <option value="">{t('knowledgePage.settings.noModel')}</option>
+              ) : (
+                embeddingOptions.map((model) => (
+                  <option key={model.value} value={model.value}>
+                    {model.label}
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+
+          <div className="tm-kb-settings-row">
+            <FormLabel hint={t('knowledgePage.settings.analysisModelHint')}>
+              {t('knowledgePage.settings.analysisModel')}
+            </FormLabel>
+            <select
+              id="kb-settings-analysis-model"
+              className="tm-kb-settings-input"
+              value={analysisModelId}
+              onChange={(event) => setAnalysisModelId(event.target.value)}
+              disabled={modelsLoading || chatModels.length === 0}
+            >
+              {chatModels.length === 0 ? (
+                <option value="">{t('knowledgePage.settings.noModel')}</option>
+              ) : (
+                chatModels.map((model) => (
+                  <option key={model.value} value={model.value}>
+                    {model.label}
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+        </>
       ) : null}
 
       {isNetworkKb && !defaultFolderKind && kbStoragePath ? (

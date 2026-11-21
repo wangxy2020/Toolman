@@ -20,8 +20,14 @@ import { ELECTRON_CHROME_USER_AGENT, createWindow, showMainWindow } from './inde
 import { attachEditableContextMenus } from './services/editable-context-menu'
 import { bootstrapCommunityHubAsync, bootstrapMainProcessServices } from './index-bootstrap'
 import { runGracefulShutdown } from './index-shutdown'
+import {
+  registerPdfjsProtocolHandler,
+  registerPdfjsSchemePrivileged,
+} from './services/pdfjs-protocol.service'
 registerProcessCrashHandlers()
 assertProductionAuthProfile()
+// Must run before app ready — privileged scheme for renderer pdf.js asset fetch.
+registerPdfjsSchemePrivileged()
 
 app.commandLine.appendSwitch('lang', 'zh-CN')
 // Edge TTS plays HTMLAudioElement after async IPC; without this Chromium may
@@ -36,6 +42,7 @@ if (e2eUserDataDir) {
 
 app.whenReady().then(() => {
   bootstrapLocalOperations()
+  registerPdfjsProtocolHandler()
 
   if (process.platform === 'win32') {
     app.setAppUserModelId('dev.toolman.app')

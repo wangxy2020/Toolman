@@ -1,4 +1,4 @@
-import { IconAgent, IconSort } from '../../components/icons'
+import { IconAgent, IconSort, IconTranslate } from '../../components/icons'
 import { HeaderIconButton } from '../../components/layout/HeaderIconButton'
 import { useI18n } from '../../i18n/useI18n'
 import {
@@ -10,6 +10,8 @@ interface Props {
   sortField: KnowledgeFileSortField
   sortAscending: boolean
   onSortFieldChange: (field: KnowledgeFileSortField) => void
+  onTranslateWithFiles?: () => void
+  translateDisabled?: boolean
   onChatWithFiles?: () => void
   chatDisabled?: boolean
 }
@@ -18,6 +20,8 @@ export function KnowledgeFileToolbar({
   sortField,
   sortAscending,
   onSortFieldChange,
+  onTranslateWithFiles,
+  translateDisabled = false,
   onChatWithFiles,
   chatDisabled = false,
 }: Props) {
@@ -26,6 +30,15 @@ export function KnowledgeFileToolbar({
 
   return (
     <div className="tm-kb-file-toolbar">
+      {onTranslateWithFiles ? (
+        <HeaderIconButton
+          label={t('knowledgePage.toolbar.translateWithFiles')}
+          disabled={translateDisabled}
+          onClick={onTranslateWithFiles}
+        >
+          <IconTranslate size={16} />
+        </HeaderIconButton>
+      ) : null}
       {onChatWithFiles ? (
         <HeaderIconButton
           label={t('knowledgePage.toolbar.chatWithFiles')}

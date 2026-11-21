@@ -30,6 +30,7 @@ export function ChatPageTranslateView({
       key={`${translationWorkspaceKey}-${translationSection}`}
       workspaceId={workspaceId}
       section={translationSection}
+      folders={translation.folders}
       providers={providers}
       translationLanguages={translationLanguages}
       activeContrast={translation.activeContrast}

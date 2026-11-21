@@ -12,7 +12,10 @@ import {
 import { HeaderIconButton } from '../../components/layout/HeaderIconButton'
 import { getModulePageConfig } from '../modules/module-config'
 import { useI18n } from '../../i18n/useI18n'
-import type { TranslationSidebarSection } from './translation-sidebar-types'
+import {
+  isTranslationDocumentsSection,
+  type TranslationSidebarSection,
+} from './translation-sidebar-types'
 
 interface Props {
   section: TranslationSidebarSection
@@ -108,7 +111,7 @@ export function TranslationPageHeader({
 }: Props) {
   const { t } = useI18n()
   const config = getModulePageConfig('translate', t)
-  const isDocuments = section === 'documents'
+  const isDocuments = isTranslationDocumentsSection(section)
   const parseLabel = parsing
     ? t('translationPage.documents.parsePreviewStop')
     : t('translationPage.documents.parsePreview')

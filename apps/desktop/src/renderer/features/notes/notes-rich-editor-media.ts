@@ -1,6 +1,7 @@
 /** Local image helpers for the notes rich editor (file:// cannot load in the renderer). */
 
 import { FileReadBinaryOutputSchema, IpcChannel } from '@toolman/shared'
+import { fileBinaryToBase64 } from '../../lib/file-binary-payload'
 
 export function toFileUrl(filePath: string): string {
   if (filePath.startsWith('file://')) return filePath
@@ -33,7 +34,7 @@ export async function loadLocalImageDataUrl(filePath: string): Promise<string | 
     payload.mimeType.startsWith('image/')
       ? payload.mimeType
       : mimeFromFileName(payload.fileName) ?? 'application/octet-stream'
-  return `data:${mime};base64,${payload.base64}`
+  return `data:${mime};base64,${fileBinaryToBase64(payload)}`
 }
 
 function mimeFromFileName(fileName: string): string | null {

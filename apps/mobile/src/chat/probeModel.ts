@@ -49,7 +49,7 @@ export async function probeModelApi(config: ModelConfig): Promise<ModelProbeResu
       messages: [{ role: 'user', content: 'ping' }],
     })
     if (result.ok) {
-      return { ok: true, message: `试用通道正常 (${Date.now() - started}ms) · deepseek-v4-flash` }
+      return { ok: true, message: `试用通道正常 (${Date.now() - started}ms) · deepseek-flash` }
     }
     return { ok: false, message: result.message }
   }

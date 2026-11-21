@@ -61,6 +61,6 @@ describe('trial llm proxy server', () => {
     expect(String(url)).toBe('https://api.deepseek.com/v1/chat/completions')
     expect(init.headers.Authorization).toBe('Bearer sk-server-trial')
     const body = JSON.parse(init.body) as { model: string }
-    expect(body.model).toBe('deepseek-v4-flash')
+    expect(body.model).toBe('deepseek-flash')
   })
 })

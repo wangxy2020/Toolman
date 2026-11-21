@@ -125,7 +125,7 @@ export const settingsPagesModelServiceZhCN = {
       title: '添加模型',
       idLabel: '模型 ID',
       idHelp: '模型在 API 中使用的唯一标识',
-      idPlaceholderDeepseek: '例如 deepseek-v4-flash 或 deepseek-v4-pro',
+      idPlaceholderDeepseek: '例如 deepseek-flash 或 deepseek-v4-pro',
       idPlaceholder: '必填 例如 gpt-3.5-turbo',
       nameLabel: '模型名称',
       nameHelp: '在界面中显示的名称',
@@ -137,7 +137,7 @@ export const settingsPagesModelServiceZhCN = {
       submit: '添加模型',
       errors: {
         idRequired: '请填写模型 ID',
-        deepseekUnsupported: 'DeepSeek 支持：deepseek-v4-flash、deepseek-v4-pro',
+        deepseekUnsupported: 'DeepSeek 支持：deepseek-flash（视觉）、deepseek-v4-pro（纯文本）',
         addFailed: '添加失败',
       },
     },

@@ -91,6 +91,44 @@ export async function updateAssistantModel(
   return { ok: true }
 }
 
+export async function updateAssistantName(
+  assistantId: string,
+  name: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const trimmed = name.trim()
+  if (!trimmed) return { ok: false, error: '名称不能为空' }
+  const result = await window.api.invoke(IpcChannel.AssistantUpdate, {
+    id: assistantId,
+    name: trimmed,
+  })
+  if (!result.ok) {
+    return { ok: false, error: result.error.message }
+  }
+  return { ok: true }
+}
+
+/** Bind a knowledge base to the assistant so RAG / search_local_knowledge can use it. */
+export async function bindAssistantKnowledgeBase(
+  assistant: Assistant,
+  kbId: string,
+): Promise<{ ok: true; changed: boolean } | { ok: false; error: string }> {
+  const existing = assistant.parameters.kbIds ?? []
+  if (existing.includes(kbId)) {
+    return { ok: true, changed: false }
+  }
+  const result = await window.api.invoke(IpcChannel.AssistantUpdate, {
+    id: assistant.id,
+    parameters: {
+      ...assistant.parameters,
+      kbIds: [...existing, kbId],
+    },
+  })
+  if (!result.ok) {
+    return { ok: false, error: result.error.message }
+  }
+  return { ok: true, changed: true }
+}
+
 export async function updateAssistantWorkingDirectory(
   assistant: Assistant,
   workingDirectory: string | undefined,

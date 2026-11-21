@@ -1,6 +1,14 @@
 import type { ProviderConfig } from './types.js'
 
+/**
+ * DeepSeek chat model ids we accept in settings.
+ * Wire name for Flash is `deepseek-flash` (vision). Legacy `deepseek-v4-flash` /
+ * `deepseek-v4-flash-vision-exp` still resolve to Flash. `deepseek-v4-pro` is text-only.
+ * @see https://api-docs.deepseek.com/guides/vision/
+ * @see https://api-docs.deepseek.com/quick_start/pricing/
+ */
 export const DEEPSEEK_SUPPORTED_MODEL_IDS = [
+  'deepseek-flash',
   'deepseek-v4-flash',
   'deepseek-v4-pro',
 ] as const
@@ -12,9 +20,16 @@ export const DEPRECATED_DEEPSEEK_MODEL_IDS = [
 ] as const
 
 export const DEEPSEEK_PRESET_MODELS = [
-  { id: 'deepseek-v4-flash', name: 'deepseek-v4-flash' },
+  { id: 'deepseek-flash', name: 'deepseek-flash' },
   { id: 'deepseek-v4-pro', name: 'deepseek-v4-pro' },
 ] as const
+
+const DEEPSEEK_FLASH_WIRE_MODEL = 'deepseek-flash'
+const DEEPSEEK_FLASH_ALIAS_IDS = new Set([
+  'deepseek-flash',
+  'deepseek-v4-flash',
+  'deepseek-v4-flash-vision-exp',
+])
 
 /** Seeded so a saved API key is enough to chat without waiting on GET /models. */
 export const NETWORK_PRESET_MODELS: Record<string, ReadonlyArray<{ id: string; name: string }>> = {
@@ -84,7 +99,7 @@ export function resolveDeepSeekChatOptions(model: string): DeepSeekChatOptions {
 
   if (key === 'deepseek-reasoner') {
     return {
-      model: 'deepseek-v4-flash',
+      model: DEEPSEEK_FLASH_WIRE_MODEL,
       extraBody: {
         thinking: { type: 'enabled' },
         reasoning_effort: 'high',
@@ -94,14 +109,18 @@ export function resolveDeepSeekChatOptions(model: string): DeepSeekChatOptions {
 
   if (key === 'deepseek-chat') {
     return {
-      model: 'deepseek-v4-flash',
+      model: DEEPSEEK_FLASH_WIRE_MODEL,
       extraBody: {
         thinking: { type: 'disabled' },
       },
     }
   }
 
-  if (key === 'deepseek-v4-pro' || key === 'deepseek-v4-flash') {
+  if (DEEPSEEK_FLASH_ALIAS_IDS.has(key)) {
+    return { model: DEEPSEEK_FLASH_WIRE_MODEL }
+  }
+
+  if (key === 'deepseek-v4-pro') {
     return { model: key }
   }
 
@@ -163,8 +182,9 @@ export function resolveDeepSeekExtraBody(
   return resolveDeepSeekChatOptions(model).extraBody
 }
 
+/** Flash (and legacy flash aliases) support image input; Pro does not. */
 export function deepSeekModelSupportsVision(model: string): boolean {
-  return resolveDeepSeekChatOptions(model).model === 'deepseek-v4-pro'
+  return resolveDeepSeekChatOptions(model).model === DEEPSEEK_FLASH_WIRE_MODEL
 }
 
 export function providerSupportsOpenAiVision(config: ProviderConfig, model: string): boolean {

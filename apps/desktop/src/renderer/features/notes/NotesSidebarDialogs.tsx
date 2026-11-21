@@ -76,10 +76,14 @@ export function NotesSidebarDialogs({
         <NotesSidebarContextMenu
           x={notebookContextMenu.x}
           y={notebookContextMenu.y}
+          canRename
           canDelete={!notebookContextMenu.notebook.isDefault}
           canIngest={Boolean(onIngestNotebook)}
           deleteLabel={t('sidebar.notes.deleteNotebook')}
           onClose={() => setNotebookContextMenu(null)}
+          onRename={() =>
+            state.setRenameTarget({ kind: 'notebook', id: notebookContextMenu.notebook.id })
+          }
           onIngest={() => setIngestNotebookTarget(notebookContextMenu.notebook)}
           onDelete={() => setDeleteNotebookTarget(notebookContextMenu.notebook)}
         />
@@ -89,10 +93,12 @@ export function NotesSidebarDialogs({
         <NotesSidebarContextMenu
           x={noteContextMenu.x}
           y={noteContextMenu.y}
+          canRename
           canDelete
           canIngest={Boolean(onIngestNote)}
           deleteLabel={t('sidebar.notes.deleteNote')}
           onClose={() => setNoteContextMenu(null)}
+          onRename={() => state.setRenameTarget({ kind: 'note', id: noteContextMenu.note.id })}
           onIngest={() => onIngestNote?.(noteContextMenu.note.id, noteContextMenu.note.title)}
           onDelete={() => setDeleteNoteTarget(noteContextMenu.note)}
         />

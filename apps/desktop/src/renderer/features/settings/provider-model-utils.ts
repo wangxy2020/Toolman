@@ -58,6 +58,7 @@ export function createProviderModel(
 }
 
 const DEEPSEEK_SUPPORTED_MODEL_IDS = new Set([
+  'deepseek-flash',
   'deepseek-v4-flash',
   'deepseek-v4-pro',
 ])

@@ -52,6 +52,7 @@ type ChatPageMainContentProps = Pick<
   | 'syncKnowledgeFolder'
   | 'handleOpenNote'
   | 'handleChatWithKnowledgeFiles'
+  | 'handleTranslateWithKnowledgeFiles'
   | 'handleChatWithNote'
   | 'setNotesIngestTarget'
   | 'p2pWorkspaces'

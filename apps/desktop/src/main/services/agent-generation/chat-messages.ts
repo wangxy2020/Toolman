@@ -122,7 +122,7 @@ export function assertProviderSupportsVisionInput(
   const userMessage = buildUserChatMessage(userContentBlocks)
   if (userMessage && chatMessageHasImages(userMessage.content)) {
     throw new ProviderError(
-      '当前模型不支持图片输入。请切换到支持视觉的模型（如 deepseek-v4-pro），或移除图片后重试。',
+      '当前模型不支持图片输入。请切换到支持视觉的模型（如 deepseek-flash、gemma4:26b），或移除图片后重试。',
       false,
     )
   }

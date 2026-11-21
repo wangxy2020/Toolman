@@ -14,7 +14,10 @@ import {
   hasDocumentExportContent,
 } from '../translation/translation-export'
 import { isTranslationDocumentPath } from '../translation/translation-document-utils'
-import type { TranslationDocumentItem } from '../translation/translation-storage'
+import {
+  DEFAULT_TRANSLATION_FOLDER_ID,
+  type TranslationDocumentItem,
+} from '../translation/translation-storage'
 import {
   listAssistantLibSidebarSessions,
   resolveAssistantLibSidebarWorkspaceId,
@@ -26,7 +29,6 @@ export type ChatPageSidebarsProps = Pick<
   ChatPageState,
   | 'showContentSidebar'
   | 'activeView'
-  | 'setActiveView'
   | 'sidebarAssistants'
   | 'activeAssistant'
   | 'chat'
@@ -59,7 +61,6 @@ export type ChatPageSidebarsProps = Pick<
 export function useChatPageSidebars({
   knowledge,
   setKnowledgeSection,
-  setActiveView,
   notes,
   setNotesIngestTarget,
   setStatusMessage,
@@ -116,10 +117,26 @@ export function useChatPageSidebars({
   const handleSelectDocument = useCallback(
     (documentId: string) => {
       translation.selectDocument(documentId)
-      setTranslationSection('documents')
+      const document = translation.documents.find((item) => item.id === documentId)
+      setTranslationSection(document?.folderId ?? DEFAULT_TRANSLATION_FOLDER_ID)
       bumpTranslationWorkspace()
     },
     [bumpTranslationWorkspace, setTranslationSection, translation],
+  )
+
+  const handleCreateFolder = useCallback(() => {
+    const folder = translation.createFolder()
+    if (!folder) return
+    setTranslationSection(folder.id)
+    bumpTranslationWorkspace()
+  }, [bumpTranslationWorkspace, setTranslationSection, translation])
+
+  const handleDeleteFolder = useCallback(
+    (folderId: string) => {
+      translation.deleteFolder(folderId)
+      bumpTranslationWorkspace()
+    },
+    [bumpTranslationWorkspace, translation],
   )
 
   const handleDeleteDocument = useCallback(
@@ -128,20 +145,6 @@ export function useChatPageSidebars({
       bumpTranslationWorkspace()
     },
     [bumpTranslationWorkspace, translation],
-  )
-
-  const handleAddDocumentToNotes = useCallback(
-    (document: TranslationDocumentItem) => {
-      if (!hasDocumentExportContent(document)) {
-        setStatusMessage(t('translationPage.sidebar.exportEmpty'))
-        return
-      }
-      const title = document.title || document.fileName
-      notes.createNoteFromMessage(title, buildDocumentExportContent(document))
-      setActiveView('notes')
-      setStatusMessage(t('translationPage.sidebar.addedToNotes', { title }))
-    },
-    [notes, setActiveView, setStatusMessage, t],
   )
 
   const handleAddDocumentToKnowledge = useCallback(
@@ -157,20 +160,23 @@ export function useChatPageSidebars({
     [notes, setNotesIngestTarget, setStatusMessage, t],
   )
 
-  const handleOpenDocument = useCallback(() => {
-    setTranslationSection('documents')
-    void (async () => {
-      const result = await window.api.invoke(IpcChannel.DialogSelectFiles, {
-        multiple: false,
-      })
-      if (!result.ok) return
-      const { paths } = DialogSelectFilesOutputSchema.parse(result.data)
-      const filePath = paths[0]
-      if (!filePath || !isTranslationDocumentPath(filePath)) return
-      translation.openDocument(filePath)
-      bumpTranslationWorkspace()
-    })()
-  }, [bumpTranslationWorkspace, setTranslationSection, translation])
+  const handleOpenDocument = useCallback(
+    (folderId: string = DEFAULT_TRANSLATION_FOLDER_ID) => {
+      setTranslationSection(folderId)
+      void (async () => {
+        const result = await window.api.invoke(IpcChannel.DialogSelectFiles, {
+          multiple: false,
+        })
+        if (!result.ok) return
+        const { paths } = DialogSelectFilesOutputSchema.parse(result.data)
+        const filePath = paths[0]
+        if (!filePath || !isTranslationDocumentPath(filePath)) return
+        translation.openDocument(filePath, folderId)
+        bumpTranslationWorkspace()
+      })()
+    },
+    [bumpTranslationWorkspace, setTranslationSection, translation],
+  )
 
   return {
     t,
@@ -180,8 +186,9 @@ export function useChatPageSidebars({
     handleSelectKnowledgeSection,
     handleSelectCommunitySection,
     handleSelectDocument,
+    handleCreateFolder,
+    handleDeleteFolder,
     handleDeleteDocument,
-    handleAddDocumentToNotes,
     handleAddDocumentToKnowledge,
     handleOpenDocument,
   }

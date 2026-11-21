@@ -31,6 +31,7 @@ export function KnowledgePage(props: KnowledgePageProps) {
     syncKnowledgeFolderError,
     onOpenNote,
     onChatWithKnowledgeFiles,
+    onTranslateWithKnowledgeFiles,
   } = props
 
   const page = useKnowledgePage(props)
@@ -44,11 +45,12 @@ export function KnowledgePage(props: KnowledgePageProps) {
     showingDefaultLocalFilesFolder,
     showingSavedSharedFolder, localDefaultKb,
     networkDefaultKb, syncDefaultKb, localFilesDefaultKb, panelDocuments, chatAttachableFiles,
+    translateOpenableFiles,
     sectionLabel, breadcrumbItemName, settingsEnabled, settingsKb, statusFallback,
     statusPriority, statusMeta,
     importReady, showFileToolbar, isNetworkKbView, panelLoading, importTarget,
     syncMoveTargets, showDefaultSyncTarget,
-    handleChatWithFiles, handleSortFieldChange, handleSelectAll, handleClearSelection,
+    handleChatWithFiles, handleTranslateWithFiles, handleSortFieldChange, handleSelectAll, handleClearSelection,
     handleDeleteSelected, handleImportFiles, handleAddUrl, handleAddSitemap,
     handleReindexAll, handleReindexSelected, handleMoveToSync, handleOpenSettings, handleSelectDedupFolder, handleDedupRefresh,
     handleDedupGoParent, handleContextMenu, handleToggleSelect, handleDeleteDocument,
@@ -90,6 +92,10 @@ export function KnowledgePage(props: KnowledgePageProps) {
               sortField={sortField}
               sortAscending={sortAscending}
               onSortFieldChange={handleSortFieldChange}
+              onTranslateWithFiles={
+                onTranslateWithKnowledgeFiles ? () => handleTranslateWithFiles() : undefined
+              }
+              translateDisabled={selectedIds.size === 0 || translateOpenableFiles.length === 0}
               onChatWithFiles={onChatWithKnowledgeFiles ? () => handleChatWithFiles() : undefined}
               chatDisabled={selectedIds.size === 0 || chatAttachableFiles.length === 0}
             />

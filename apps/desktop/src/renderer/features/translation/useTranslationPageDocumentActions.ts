@@ -39,7 +39,9 @@ export function useTranslationPageDocumentActions(options: {
   livePageSnapshotsRef: MutableRefObject<TranslationDocumentPageSnapshot[]>
   onSaveDocument: (input: SaveTranslationDocumentInput) => string | null
   onSaveDocumentToNotes?: (title: string, content: string) => void
-  onOpenDocumentPath: (filePath: string) => void
+  onOpenDocumentPath: (filePath: string, folderId?: string) => void
+  /** Active sidebar folder — new files from the empty state land here. */
+  openDocumentFolderId?: string
   showStatus: (message: string) => void
   getPendingPageRemark?: () => { documentId: string; pageNumber: number; text: string } | null
 }) {
@@ -61,6 +63,7 @@ export function useTranslationPageDocumentActions(options: {
     onSaveDocument,
     onSaveDocumentToNotes,
     onOpenDocumentPath,
+    openDocumentFolderId,
     showStatus,
     getPendingPageRemark,
   } = options
@@ -146,8 +149,8 @@ export function useTranslationPageDocumentActions(options: {
       setError(t('translationPage.documents.unsupportedType'))
       return
     }
-    onOpenDocumentPath(filePath)
-  }, [onOpenDocumentPath, setError, t, workspaceId])
+    onOpenDocumentPath(filePath, openDocumentFolderId)
+  }, [onOpenDocumentPath, openDocumentFolderId, setError, t, workspaceId])
 
   const handleOpenExternally = useCallback(async () => {
     if (!activeDocument?.filePath) return

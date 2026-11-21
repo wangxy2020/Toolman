@@ -53,11 +53,11 @@ export const modulesEn = {
     },
     translate: {
       title: 'Translate',
-      addLabel: 'Open document',
+      addLabel: 'New folder',
       headerAll: 'Documents',
-      sidebarEmptyHint: 'No documents yet. Click above to open one.',
+      sidebarEmptyHint: 'No folders yet. Click above to create one.',
       contentEmptyTitle: 'Translate',
-      contentEmptyHint: 'Open a document on the left to view source and translation.',
+      contentEmptyHint: 'Open a document in a left-side folder to view source and translation.',
     },
     'assistant-lib': {
       title: 'Classroom',

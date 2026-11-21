@@ -1,5 +1,9 @@
 import { basename, extname } from 'node:path'
-import { parseFile } from '@toolman/knowledge'
+import {
+  isPdfPageTextUsable,
+  parseFile,
+  splitPdfPagesByMarkers,
+} from '@toolman/knowledge'
 import {
   TranslationDocumentParsePagesInputSchema,
   TranslationDocumentParsePagesOutputSchema,
@@ -8,6 +12,7 @@ import {
   toErrorMessage,
 } from '@toolman/shared'
 import { parsePdfDocument, clearOdlPreviewCache } from './document-parser.service'
+import { tryGetIndexedPlainText } from './indexed-document-text.service'
 import { assertUserAccessiblePath } from './path-sandbox.service'
 
 const nonPdfPlainTextCache = new Map<string, string>()
@@ -18,6 +23,21 @@ function detectKind(filePath: string): 'pdf' | 'word' | 'excel' | 'unknown' {
   if (ext === '.doc' || ext === '.docx') return 'word'
   if (ext === '.xls' || ext === '.xlsx' || ext === '.csv') return 'excel'
   return 'unknown'
+}
+
+function indexedPagesByNumber(
+  workspaceId: string | undefined | null,
+  filePath: string,
+): Map<number, string> {
+  if (!workspaceId) return new Map()
+  const indexed = tryGetIndexedPlainText(workspaceId, filePath)
+  if (!indexed) return new Map()
+  const pages = splitPdfPagesByMarkers(indexed)
+  if (pages.length > 0) {
+    return new Map(pages.map((page) => [page.pageNumber, page.text] as const))
+  }
+  // Chunks without page markers — still useful for single-page / first-page fill.
+  return new Map([[1, indexed]])
 }
 
 export async function parseTranslationDocumentPages(input: unknown) {
@@ -55,16 +75,29 @@ export async function parseTranslationDocumentPages(input: unknown) {
         odlScanDetected?: boolean
       }
 
+      // Prefer already-OCR'd / vectorized KB text when live parse leaves a page empty.
+      const kbPages =
+        data.metadataOnly || data.odlWarmOnly
+          ? new Map<number, string>()
+          : indexedPagesByNumber(data.workspaceId, filePath)
+
       return ipcOk(
         TranslationDocumentParsePagesOutputSchema.parse({
           totalPages: result.totalPages,
           pages: result.pages.map((page) => {
             const markdown = page.markdown?.trim() ?? page.text?.trim() ?? ''
-            const text = page.text?.trim() ?? markdown
+            let text = page.text?.trim() ?? markdown
+            if (!isPdfPageTextUsable(text)) {
+              const fromKb = kbPages.get(page.pageNumber)?.trim()
+              if (fromKb) {
+                text = fromKb
+              }
+            }
+            const resolvedMarkdown = isPdfPageTextUsable(markdown) ? markdown : text
             return {
               pageNumber: page.pageNumber,
               text,
-              ...(markdown || text ? { markdown: markdown || text } : {}),
+              ...(resolvedMarkdown || text ? { markdown: resolvedMarkdown || text } : {}),
             }
           }),
           kind,
@@ -87,6 +120,20 @@ export async function parseTranslationDocumentPages(input: unknown) {
         TranslationDocumentParsePagesOutputSchema.parse({
           totalPages: 1,
           pages: [],
+          kind,
+        }),
+      )
+    }
+
+    const indexedText = data.workspaceId
+      ? tryGetIndexedPlainText(data.workspaceId, filePath)
+      : null
+    if (indexedText?.trim()) {
+      nonPdfPlainTextCache.set(filePath, indexedText)
+      return ipcOk(
+        TranslationDocumentParsePagesOutputSchema.parse({
+          totalPages: 1,
+          pages: [{ pageNumber: 1, text: indexedText.trim() }],
           kind,
         }),
       )
