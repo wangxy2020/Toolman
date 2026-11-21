@@ -2,8 +2,8 @@
  * Progressive left-pane PDF preview policy (IMA-like).
  *
  * Landed-page first: fling past unloaded pages → stop on N → only N is required.
- * Flow on settle: N immediate/readable (≥720) → neighbor ±1 readable → N sharp
- * (≤1440). Soft-cancel drops other pages without killing the preview worker /
+ * Flow on settle: N immediate/readable (≤960) → neighbor ±1 readable → N sharp
+ * (≤2880). Soft-cancel drops other pages without killing the preview worker /
  * pdf.js document cache. Focused page never busy-drops (no white frame).
  */
 

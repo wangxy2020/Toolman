@@ -24,12 +24,12 @@ export const AssistantSchema = z.object({
     mcpServerIds: z.array(z.string()).optional(),
     skillIds: z.array(z.string()).optional(),
     kbIds: z.array(UuidSchema).optional(),
-    kbTopK: z.number().int().min(1).max(20).optional(),
+    kbTopK: z.number().int().min(1).max(48).optional(),
     kbScoreThreshold: z.number().min(0).max(1).optional(),
     kbSettings: z
       .record(
         z.object({
-          topK: z.number().int().min(1).max(20).optional(),
+          topK: z.number().int().min(1).max(48).optional(),
           scoreThreshold: z.number().min(0).max(1).optional(),
         }),
       )

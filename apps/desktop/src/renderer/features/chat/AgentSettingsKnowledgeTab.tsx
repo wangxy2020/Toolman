@@ -145,7 +145,7 @@ export function AgentSettingsKnowledgeTab({
             className="tm-form-input"
             type="number"
             min={1}
-            max={20}
+            max={48}
             value={kbTopK ?? ''}
             placeholder={t('agent.knowledge.placeholderTopK')}
             onChange={(event) => onKbTopKChange(parseOptionalNumber(event.target.value))}
@@ -267,7 +267,7 @@ export function AgentSettingsKnowledgeTab({
                                     className="tm-form-input"
                                     type="number"
                                     min={1}
-                                    max={20}
+                                    max={48}
                                     value={perKb?.topK ?? ''}
                                     placeholder={t('agent.knowledge.useGlobalDefault')}
                                     onChange={(event) =>

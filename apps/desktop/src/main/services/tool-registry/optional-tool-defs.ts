@@ -97,7 +97,7 @@ export const LOCAL_KNOWLEDGE_TOOL_DEFS: ToolDefinition[] = [
         properties: {
           query: { type: 'string', description: '检索问题' },
           kbId: { type: 'string', description: '可选，指定单个知识库 ID；省略时按智能体绑定范围检索' },
-          topK: { type: 'number', description: '返回条数，默认 6' },
+          topK: { type: 'number', description: '返回条数，默认 16；命中文档后会尽量灌入该文件全文分块' },
         },
         required: ['query'],
       },

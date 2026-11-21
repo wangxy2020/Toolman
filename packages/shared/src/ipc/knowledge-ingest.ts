@@ -32,12 +32,12 @@ export const KnowledgeSearchInputSchema = z.object({
   workspaceId: UuidSchema,
   kbIds: z.array(UuidSchema).optional(),
   query: z.string().min(1).max(4096),
-  topK: z.number().int().min(1).max(20).default(6),
+  topK: z.number().int().min(1).max(48).default(16),
   scoreThreshold: z.number().min(0).max(1).optional(),
   kbSettings: z
     .record(
       z.object({
-        topK: z.number().int().min(1).max(20).optional(),
+        topK: z.number().int().min(1).max(48).optional(),
         scoreThreshold: z.number().min(0).max(1).optional(),
       }),
     )

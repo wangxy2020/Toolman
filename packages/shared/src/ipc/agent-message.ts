@@ -58,7 +58,7 @@ export const MessageSendInputSchema = z.object({
       memoryRetentionDays: z.number().int().positive().optional(),
       kbEnabled: z.boolean().optional(),
       kbIds: z.array(UuidSchema).optional(),
-      kbTopK: z.number().int().min(1).max(20).optional(),
+      kbTopK: z.number().int().min(1).max(48).optional(),
       kbScoreThreshold: z.number().min(0).max(1).optional(),
       mcpServerIds: z.array(z.string()).optional(),
       documentOcrEnabled: z.boolean().optional(),

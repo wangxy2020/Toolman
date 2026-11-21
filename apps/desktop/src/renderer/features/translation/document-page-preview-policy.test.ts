@@ -110,10 +110,11 @@ describe('document-page-preview-policy', () => {
     expect(resolvePdfPreviewPriority(5, 4)).toBe('prefetch')
   })
 
-  it('uses readable ≤720 then sharp ≤1440', () => {
-    expect(PDF_PREVIEW_FAST_MAX_WIDTH).toBe(720)
-    expect(PDF_PREVIEW_MAX_RENDER_WIDTH).toBe(1440)
-    expect(resolvePdfPreviewFastWidth(800)).toBe(720)
+  it('uses readable ≤960 then sharp ≤2880', () => {
+    expect(PDF_PREVIEW_FAST_MAX_WIDTH).toBe(960)
+    expect(PDF_PREVIEW_MAX_RENDER_WIDTH).toBe(2880)
+    expect(resolvePdfPreviewFastWidth(800)).toBe(800)
+    expect(resolvePdfPreviewFastWidth(1200)).toBe(960)
     expect(resolvePdfPreviewFastWidth(400)).toBe(400)
     expect(resolvePdfPreviewSharpWidth(400)).toBeGreaterThan(resolvePdfPreviewFastWidth(400))
     expect(resolvePdfPreviewSharpWidth(800)).toBeGreaterThan(resolvePdfPreviewFastWidth(800))

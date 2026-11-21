@@ -153,7 +153,7 @@ export async function executeSearchLocalKnowledge(
   if (!query) return 'Error: query 不能为空'
 
   const kbIdArg = typeof args.kbId === 'string' && args.kbId.trim() ? args.kbId.trim() : undefined
-  const topK = typeof args.topK === 'number' ? args.topK : 6
+  const topK = typeof args.topK === 'number' ? args.topK : 16
   const assistant = context.assistantId ? getAssistantRow(context.assistantId) : null
   const assistantParams = assistant
     ? parseAssistantParametersJson(assistant.parametersJson)

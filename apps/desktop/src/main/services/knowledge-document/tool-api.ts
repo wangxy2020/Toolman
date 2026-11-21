@@ -11,6 +11,10 @@ import {
   startReindexDocumentInBackground,
   startReindexKnowledgeBaseInBackground,
 } from '../knowledge-ingest.service'
+import {
+  DEFAULT_KNOWLEDGE_CHAT_TOP_K,
+  expandKnowledgeHitsWithFullDocuments,
+} from './expand-full-documents'
 import { searchKnowledge } from './search'
 
 function listSearchableKbIds(workspaceId: string): string[] {
@@ -69,17 +73,21 @@ export async function searchKnowledgeForTool(options: {
   topK?: number
   scoreThreshold?: number
   kbSettings?: Record<string, { topK?: number; scoreThreshold?: number }>
+  /** When true (default), expand top matched docs to full indexed text. */
+  expandFullDocuments?: boolean
 }) {
   if (options.kbIds.length === 0) return []
 
-  return searchKnowledge({
+  const hits = await searchKnowledge({
     workspaceId: options.workspaceId,
     kbIds: options.kbIds,
     query: options.query,
-    topK: options.topK ?? 6,
+    topK: options.topK ?? DEFAULT_KNOWLEDGE_CHAT_TOP_K,
     scoreThreshold: options.scoreThreshold,
     kbSettings: options.kbSettings,
   })
+  if (options.expandFullDocuments === false) return hits
+  return expandKnowledgeHitsWithFullDocuments(hits, options.query)
 }
 
 export function getAssistantKbIds(assistant: { kbIdsJson: string } | null): string[] {
@@ -101,14 +109,16 @@ export async function searchKnowledgeForChat(options: {
   kbSettings?: Record<string, { topK?: number; scoreThreshold?: number }>
 }): Promise<KnowledgeSearchResult[]> {
   if (options.kbIds.length === 0) return []
-  return searchKnowledge({
+  const hits = await searchKnowledge({
     workspaceId: options.workspaceId,
     kbIds: options.kbIds,
     query: options.query,
-    topK: options.topK ?? 6,
+    topK: options.topK ?? DEFAULT_KNOWLEDGE_CHAT_TOP_K,
     scoreThreshold: options.scoreThreshold,
     kbSettings: options.kbSettings,
   })
+  // Prefer whole indexed documents over a thin top-K slice of chunks.
+  return expandKnowledgeHitsWithFullDocuments(hits, options.query)
 }
 
 export function resolveEffectiveKbIds(options: {
