@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { assistantLibSessionMetadataPatch, type Assistant, type Session } from '@toolman/shared'
 import {
   ensureActiveClassroomChatSession,
+  healClassroomChatOrphans,
   isClassroomOwnedSession,
 } from './classroom-session-binding'
 
@@ -110,5 +111,79 @@ describe('ensureActiveClassroomChatSession', () => {
     expect(result?.id).toBe('course-1')
     expect(selectSession).toHaveBeenCalledWith('course-1')
     expect(createSession).not.toHaveBeenCalled()
+  })
+
+  it('switches from a blank shell to a course topic when courses exist', async () => {
+    const createSession = vi.fn(async () => null)
+    const selectSession = vi.fn(async () => {})
+    const blank = session({
+      id: 'blank',
+      title: '开始上课。请根据本课…',
+      assistantId: 'class',
+      updatedAt: 9,
+      messageCount: 4,
+    })
+    const course = session({
+      id: 'course-1',
+      title: '高中化学必修1',
+      assistantId: 'class',
+      metadata: classroomMeta,
+      updatedAt: 2,
+      messageCount: 0,
+    })
+
+    const result = await ensureActiveClassroomChatSession({
+      classroomAssistant,
+      chat: {
+        sessions: [blank, course],
+        activeSession: blank,
+        createSession,
+        selectSession,
+      },
+      preferredSessionId: null,
+    })
+
+    expect(result?.id).toBe('course-1')
+    expect(selectSession).toHaveBeenCalledWith('course-1')
+    expect(createSession).not.toHaveBeenCalled()
+  })
+
+  it('heals orphan start-class chats into the empty course topic', async () => {
+    const orphan = session({
+      id: 'orphan',
+      title: '开始上课。请根据本课教学大纲…',
+      assistantId: 'class',
+      messageCount: 4,
+      updatedAt: 9,
+      metadata: { socraticState: { mastered: ['a'] } },
+    })
+    const course = session({
+      id: 'course',
+      title: '高中化学必修1',
+      assistantId: 'class',
+      metadata: classroomMeta,
+      messageCount: 0,
+      updatedAt: 2,
+    })
+    const updateSession = vi.fn(async () => orphan)
+    const deleteSession = vi.fn(async () => true)
+
+    const result = await healClassroomChatOrphans({
+      classroomAssistantId: 'class',
+      sessions: [orphan, course],
+      updateSession,
+      deleteSession,
+    })
+
+    expect(result).toEqual({
+      healed: true,
+      keepSessionId: 'orphan',
+      dropSessionId: 'course',
+    })
+    expect(updateSession).toHaveBeenCalledWith(
+      'orphan',
+      expect.objectContaining({ title: '课程' }),
+    )
+    expect(deleteSession).toHaveBeenCalledWith('course')
   })
 })

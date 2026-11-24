@@ -166,8 +166,8 @@ export function applySavedPageSnapshots(
   const nextPages = pages.map((page) => {
     const snapshot = byPage.get(page.pageNumber)
     if (!snapshot) return page
+    // mergeWithExisting: keep pages that already have displayable bodies; fill gaps only.
     if (mergeWithExisting && pageHasRestoredContent(page)) return page
-    if (mergeWithExisting) return page
     if (pageMatchesSnapshot(page, snapshot)) return page
 
     changed = true
@@ -201,26 +201,12 @@ export function createLightweightPagesFromSnapshots(
     if (!snapshot) {
       return { pageNumber, sourceText: '', translatedText: '', status: 'idle' as const }
     }
-    if (snapshot.status === 'empty') {
-      return {
-        pageNumber,
-        sourceText: '',
-        translatedText: '',
-        status: 'empty' as const,
-        error: NO_VALID_PAGE_TEXT,
-      }
-    }
-    return {
-      pageNumber,
-      sourceText: '',
-      translatedText: '',
-      status:
-        snapshot.status === 'done'
-          ? ('done' as const)
-          : snapshot.status === 'parsed'
-            ? ('parsed' as const)
-            : ('idle' as const),
-    }
+    // Keep saved bodies (parse markdown + Chinese) on the shell so reopen paints
+    // immediately — empty done/parsed shells stayed blank until 翻译/解析.
+    return snapshotToPageState(
+      { pageNumber, sourceText: '', translatedText: '', status: 'idle' },
+      snapshot,
+    )
   })
 }
 

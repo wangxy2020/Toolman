@@ -4,6 +4,7 @@ import {
   medianFontSize,
   reportDocumentPageNaturalFit,
   getSharedDocumentPageFit,
+  resolvePageFitAgainstShared,
   styleForSharedFontSize,
 } from './document-page-fit-shared'
 import { DOCUMENT_FIT_FONT_MIN, DOCUMENT_FIT_FONT_MAX } from './document-page-fit'
@@ -50,5 +51,18 @@ describe('document page fit shared', () => {
     expect(low.fontSize).toBe(DOCUMENT_FIT_FONT_MIN)
     expect(high.fontSize).toBe(DOCUMENT_FIT_FONT_MAX)
     expect(high.lineHeight).toBeGreaterThanOrEqual(low.lineHeight)
+  })
+
+  it('never enlarges a dense page past its own fitted 字号', () => {
+    const page = { fontSize: 12, lineHeight: 1.35, padding: 8, scale: 1 }
+    const shared = { fontSize: 15, lineHeight: 1.5, padding: 14, scale: 1 }
+    expect(resolvePageFitAgainstShared(page, shared).fontSize).toBe(12)
+    expect(resolvePageFitAgainstShared(page, shared).lineHeight).toBe(1.35)
+  })
+
+  it('allows shared 字号 to shrink a sparse page', () => {
+    const page = { fontSize: 15, lineHeight: 1.5, padding: 14, scale: 1 }
+    const shared = { fontSize: 13, lineHeight: 1.4, padding: 10, scale: 1 }
+    expect(resolvePageFitAgainstShared(page, shared).fontSize).toBe(13)
   })
 })

@@ -1,5 +1,5 @@
 import type { KnowledgeBase } from '@toolman/shared'
-import { KnowledgeSearchDebugPanel } from './KnowledgeSearchDebugPanel'
+import { KnowledgeRecallTestPanel } from './KnowledgeRecallTestPanel'
 import { KnowledgeSourcesPanel } from './KnowledgeSourcesPanel'
 import { KnowledgeIngestJobPanel } from './KnowledgeIngestJobPanel'
 import type { KnowledgeBaseSettingsModalState } from './useKnowledgeBaseSettingsModal'
@@ -61,6 +61,8 @@ export function KnowledgeBaseSettingsAdvancedTab(props: Props) {
 
   return (
     <div className="tm-kb-settings-form">
+      <KnowledgeRecallTestPanel workspaceId={workspaceId} kbId={kb.id} />
+
       {isLocalKb ? (
         <div className="tm-kb-settings-row">
           <FormLabel hint={t('knowledgePage.settings.advanced.docProcessorHint')}>
@@ -182,9 +184,6 @@ export function KnowledgeBaseSettingsAdvancedTab(props: Props) {
         </select>
       </div>
 
-      {import.meta.env.DEV ? (
-        <KnowledgeSearchDebugPanel workspaceId={workspaceId} kbId={kb.id} />
-      ) : null}
       <KnowledgeSourcesPanel workspaceId={workspaceId} onChanged={onSaved} />
       <KnowledgeIngestJobPanel workspaceId={workspaceId} kbId={kb.id} />
     </div>

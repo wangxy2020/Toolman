@@ -1,3 +1,4 @@
+import { isAssistantLibAssistantName } from '@toolman/shared'
 import { ChatComposer } from './ChatComposer'
 import { ChatHeader } from './ChatHeader'
 import { MessageSettingsPanel } from './MessageSettingsPanel'
@@ -138,7 +139,11 @@ export function ChatPageAgentView({
           onEditUserMessage={(id) => handleEditUserMessage(id)}
           onPrefillConsumed={handlePrefillConsumed}
           onUpdateAppSettings={updateAppSettings}
-          onCreateSession={() => void chat.createSession(activeAssistant?.id)}
+          onCreateSession={
+            activeAssistant && isAssistantLibAssistantName(activeAssistant.name)
+              ? undefined
+              : () => void chat.createSession(activeAssistant?.id)
+          }
           onClearSession={() => void chat.clearSessionMessages()}
           onSaveToNote={(messageId) => {
             const message = chat.messages.find((item) => item.id === messageId)

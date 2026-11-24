@@ -25,6 +25,8 @@ export const agentZhCN = {
   fields: {
     model: '模型',
     modelHint: '选择运行此智能体的本地或云端大模型',
+    modelHintClassroom:
+      '课堂智能体的默认模型。各课程可在「课程设置」中单独指定模型；上课对话优先使用课程模型。',
     modelHintCreate: '选择智能体使用的默认模型',
     groupModelLocked: '群组共享智能体的模型由共享者决定',
     workingDirectory: '工作目录',
@@ -173,6 +175,8 @@ export const agentEn = {
   fields: {
     model: 'Model',
     modelHint: 'Choose the local or cloud model for this agent',
+    modelHintClassroom:
+      'Default model for the classroom agent. Each course can set its own model in Course settings; course chats prefer that model.',
     modelHintCreate: 'Default model for this agent',
     groupModelLocked: 'Model for shared group agents is set by the sharer',
     workingDirectory: 'Working directory',

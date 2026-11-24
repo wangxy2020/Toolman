@@ -1,4 +1,5 @@
 import {
+  type Assistant,
   type KnowledgeBase,
   type Provider,
   type Session,
@@ -21,10 +22,11 @@ type Props = {
   knowledgeBases: KnowledgeBase[]
   defaultLocalFolderPath: string | null
   onClose: () => void
-  onSaved?: () => void | Promise<void>
+  onSaved?: (session?: Session) => void | Promise<void>
   onKnowledgeBasesChanged?: () => void | Promise<void>
   onStatusMessage?: (message: string) => void
   onDeleteSession?: (sessionId: string) => void | Promise<void>
+  classroomAssistant?: Assistant | null
   defaultModelId?: string | null
   providers?: Provider[]
 }
@@ -40,6 +42,7 @@ export function AssistantLibSettingsDialog({
   onKnowledgeBasesChanged,
   onStatusMessage,
   onDeleteSession,
+  classroomAssistant,
   defaultModelId,
   providers,
 }: Props) {
@@ -87,6 +90,7 @@ export function AssistantLibSettingsDialog({
     onKnowledgeBasesChanged,
     onStatusMessage,
     onDeleteSession,
+    classroomAssistant,
     defaultModelId,
     providers,
   })

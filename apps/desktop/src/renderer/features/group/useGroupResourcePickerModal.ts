@@ -39,7 +39,7 @@ export function useGroupResourcePickerModal({
   const [error, setError] = useState<string | null>(null)
 
   const selectableGroups = useMemo(
-    () => groups.filter((group) => !group.disabled),
+    () => groups.filter((group) => !group.disabled && !group.sectionHeader),
     [groups],
   )
 

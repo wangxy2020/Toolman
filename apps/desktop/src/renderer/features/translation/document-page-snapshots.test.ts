@@ -191,7 +191,7 @@ describe('document-page-snapshots', () => {
     ).toBe(17)
   })
 
-  it('creates lightweight page slots without copying snapshot bodies', () => {
+  it('creates lightweight page slots with snapshot bodies so reopen paints immediately', () => {
     const pages = createLightweightPagesFromSnapshots(
       [
         {
@@ -201,18 +201,34 @@ describe('document-page-snapshots', () => {
           parsedMarkdown: '# Parsed',
           status: 'parsed',
         },
-        { pageNumber: 2, sourceText: '', translatedText: '', status: 'empty' },
+        {
+          pageNumber: 2,
+          sourceText: 'Hello',
+          translatedText: '你好',
+          parsedMarkdown: '<p>Hello</p>',
+          status: 'done',
+        },
+        { pageNumber: 3, sourceText: '', translatedText: '', status: 'empty' },
       ],
-      2,
+      3,
     )
 
     expect(pages[0]).toEqual({
       pageNumber: 1,
-      sourceText: '',
-      translatedText: '',
+      sourceText: 'src',
+      translatedText: '# Parsed',
+      parsedMarkdown: '# Parsed',
       status: 'parsed',
+      error: undefined,
     })
-    expect(pages[1]?.status).toBe('empty')
+    expect(pages[1]).toMatchObject({
+      pageNumber: 2,
+      sourceText: 'Hello',
+      translatedText: '你好',
+      parsedMarkdown: '<p>Hello</p>',
+      status: 'done',
+    })
+    expect(pages[2]?.status).toBe('empty')
   })
 
   it('resolves snapshot bodies only when the live page is still empty', () => {

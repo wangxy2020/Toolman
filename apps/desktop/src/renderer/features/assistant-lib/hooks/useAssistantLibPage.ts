@@ -5,6 +5,7 @@ import {
   isClassroomLive,
   parseAssistantLibSessionMeta,
   type KnowledgeBase,
+  type Session,
 } from '@toolman/shared'
 import { useI18n } from '../../../i18n/useI18n'
 import { safeInvoke } from '../../../lib/ipc-client'
@@ -25,7 +26,10 @@ import {
   resolveActiveLearningSession,
   resolveAssistantLibSecondaryLabel,
 } from '../assistant-lib-page-utils'
-import { ensureActiveClassroomChatSession } from '../classroom-session-binding'
+import {
+  ensureActiveClassroomChatSession,
+  healClassroomChatOrphans,
+} from '../classroom-session-binding'
 import { createLocalTextbookKnowledgeBase } from '../create-textbook-kb'
 import { useAssistantLibBootstrap } from './useAssistantLibBootstrap'
 import { useAssistantLibPageClass } from './useAssistantLibPageClass'
@@ -60,11 +64,39 @@ export function useAssistantLibPage(props: AssistantLibPageProps) {
     void (async () => {
       const linked = await ensureClassroom()
       if (cancelled || !linked) return
+
+      const sessionsAfterLoad = await props.chat.loadSessions()
+      if (cancelled) return
+      const healed = await healClassroomChatOrphans({
+        classroomAssistantId: linked.assistant.id,
+        sessions: sessionsAfterLoad.length > 0 ? sessionsAfterLoad : props.chat.sessions,
+        updateSession: async (sessionId, patch) => {
+          const result = await window.api.invoke(IpcChannel.SessionUpdate, {
+            id: sessionId,
+            title: patch.title,
+            metadata: patch.metadata,
+          })
+          if (!result.ok) return null
+          const session = result.data as Session
+          props.chat.upsertSession(session)
+          return session
+        },
+        deleteSession: async (sessionId) => {
+          const result = await window.api.invoke(IpcChannel.SessionDelete, { id: sessionId })
+          if (!result.ok) return false
+          await props.chat.loadSessions()
+          return true
+        },
+      })
+      if (cancelled) return
+      if (healed.healed) {
+        await props.chat.loadSessions()
+        if (healed.keepSessionId) await selectSession(healed.keepSessionId)
+      }
+
       const activeWasRemoved = Boolean(
         activeSessionId && linked.removedDefaultIds.includes(activeSessionId),
       )
-      // Prefer a real course when present; otherwise bind a blank 课堂 assistant topic
-      // (same empty-chat pattern as 自动化 with no tasks).
       await ensureActiveClassroomChatSession({
         classroomAssistant: linked.assistant,
         chat: {
@@ -73,19 +105,15 @@ export function useAssistantLibPage(props: AssistantLibPageProps) {
           createSession,
           selectSession,
         },
-        preferredSessionId: linked.session?.id ?? null,
+        preferredSessionId: healed.keepSessionId ?? null,
       })
     })()
     return () => {
       cancelled = true
     }
-  }, [
-    ensureClassroom,
-    activeAssistantId,
-    activeSessionId,
-    selectSession,
-    createSession,
-  ])
+    // Bind once when classroom module mounts / workspace assistant is ready.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid rebinding on every topic click
+  }, [ensureClassroom, props.workspaceId, selectSession, createSession])
 
   const activeLearningSession = useMemo(
     () =>
@@ -241,6 +269,7 @@ export function useAssistantLibPage(props: AssistantLibPageProps) {
     knowledgeBases,
     submittingCourse,
     learningSessions,
+    sharedAssistant,
     busy,
     error,
     activeLearningSession,

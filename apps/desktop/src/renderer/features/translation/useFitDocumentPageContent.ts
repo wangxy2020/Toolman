@@ -1,6 +1,5 @@
 import { useLayoutEffect, useRef, type RefObject } from 'react'
 import {
-  DOCUMENT_FIT_SCALE_MIN,
   DOCUMENT_PAGE_FIT_PROSE_CAPS,
   applyDocumentPageFitVars,
   canReuseDocumentPageFit,
@@ -19,6 +18,7 @@ import {
 import {
   getSharedDocumentPageFit,
   reportDocumentPageNaturalFit,
+  resolvePageFitAgainstShared,
   subscribeSharedDocumentPageFit,
   type DocumentFitKind,
 } from './document-page-fit-shared'
@@ -86,19 +86,24 @@ export function useFitDocumentPageContent(
     }
 
     const paintStable = () => {
-      // Neighbors / mid-scroll: prefer document shared 字号, then last measure.
+      // Neighbors / mid-scroll: shared may shrink toward the document median,
+      // but never enlarge past this page's last/saved fit (overflows the box).
       const shared = documentId ? getSharedDocumentPageFit(documentId, fitKind) : null
       const base = measuredFitRef.current ?? savedFitRef.current
-      if (shared) {
-        const next = withBox(
-          { ...shared, scale: 1 },
-          base?.boxWidth || box.clientWidth,
-          base?.boxHeight || box.clientHeight,
+      if (base) {
+        commit(
+          withBox(
+            resolvePageFitAgainstShared(base, shared),
+            base.boxWidth || box.clientWidth,
+            base.boxHeight || box.clientHeight,
+          ),
+          false,
         )
-        commit(next, false)
         return
       }
-      if (base) commit(base, false)
+      if (shared) {
+        commit(withBox({ ...shared, scale: 1 }, box.clientWidth, box.clientHeight), false)
+      }
     }
 
     if (!enabled) {
@@ -122,16 +127,15 @@ export function useFitDocumentPageContent(
       boxHeight: number,
     ) => {
       if (documentId && pageNumber > 0) {
-        const shared = reportDocumentPageNaturalFit({
+        // Contribute to the document median for neighbors, but keep this page's
+        // measured type — median pull-up was leaving dense pages too large.
+        reportDocumentPageNaturalFit({
           documentId,
           pageNumber,
           kind: fitKind,
           fontSize: natural.fontSize,
           caps,
         })
-        // Document median 字号 — dense pages scroll instead of shrinking alone.
-        commit(withBox({ ...shared, scale: 1 }, boxWidth, boxHeight))
-        return
       }
       commit(withBox(natural, boxWidth, boxHeight))
     }
@@ -142,7 +146,7 @@ export function useFitDocumentPageContent(
       const boxWidth = box.clientWidth
       if (boxHeight < 1 || boxWidth < 1) return
 
-      // Width-aware caps: narrow pane → smaller type; wide pane → larger type.
+      // Two-bucket caps: default window vs maximized (no continuous width steps).
       const widthCaps = resolveDocumentPageFitCapsForWidth(boxWidth, caps)
       measuringRef.current = true
       const inner = box.firstElementChild as HTMLElement | null
@@ -227,19 +231,8 @@ export function useFitDocumentPageContent(
             caps,
           })
           const shared = getSharedDocumentPageFit(documentId, fitKind)
-          if (shared) {
-            commit(
-              withBox(
-                {
-                  ...shared,
-                  scale: saved.scale >= DOCUMENT_FIT_SCALE_MIN ? saved.scale : 1,
-                },
-                boxWidth,
-                boxHeight,
-              ),
-            )
-            return
-          }
+          commit(withBox(resolvePageFitAgainstShared(saved, shared), boxWidth, boxHeight))
+          return
         }
         commit(saved)
         return
@@ -264,7 +257,7 @@ export function useFitDocumentPageContent(
         return
       }
       if (isNegligibleDocumentFitBoxChange(measured, boxWidth, boxHeight)) return
-      // Significant width change → full remeasure so type tracks the pane.
+      // Only default ↔ maximized crosses remeasure 字号.
       if (shouldRemeasureDocumentPageFitForWidth(measured.boxWidth, boxWidth)) {
         measure()
         return
@@ -280,13 +273,10 @@ export function useFitDocumentPageContent(
       const shared = getSharedDocumentPageFit(documentId, fitKind)
       const measured = measuredFitRef.current
       if (!shared || !measured) return
-      if (Math.abs(shared.fontSize - measured.fontSize) < 0.15) return
+      const next = resolvePageFitAgainstShared(measured, shared)
+      if (Math.abs(next.fontSize - measured.fontSize) < 0.15) return
       commit(
-        withBox(
-          { ...shared, scale: 1 },
-          measured.boxWidth || box.clientWidth,
-          measured.boxHeight || box.clientHeight,
-        ),
+        withBox(next, measured.boxWidth || box.clientWidth, measured.boxHeight || box.clientHeight),
       )
     })
 

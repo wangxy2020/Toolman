@@ -189,6 +189,7 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
     selectSession: handleSelectSession,
     clearActiveSession: handleClearActiveSession,
     renameSession: session.renameSession,
+    upsertSession: session.upsertSession,
     deleteSession: handleDeleteSession,
     deleteAssistant,
     sendMessage: sendState.sendMessage,

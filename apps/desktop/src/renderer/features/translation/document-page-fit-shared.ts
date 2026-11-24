@@ -1,4 +1,5 @@
 import {
+  DOCUMENT_FIT_SCALE_MIN,
   DOCUMENT_PAGE_FIT_PROSE_CAPS,
   type DocumentPageFitCaps,
   type DocumentPageFitStyle,
@@ -45,6 +46,23 @@ export function styleForSharedFontSize(
     padding: Math.round(caps.padMin + (caps.padMax - caps.padMin) * t),
     scale: 1,
   }
+}
+
+/**
+ * Apply document shared 字号 without enlarging a page past its own fit.
+ * Dense pages kept getting the median and overflowed the PDF box.
+ */
+export function resolvePageFitAgainstShared(
+  page: DocumentPageFitStyle,
+  shared: DocumentPageFitStyle | null | undefined,
+): DocumentPageFitStyle {
+  const scale = page.scale >= DOCUMENT_FIT_SCALE_MIN ? Math.min(1, page.scale) : 1
+  if (!shared) return { ...page, scale }
+  const fontSize = Math.min(round1(page.fontSize), shared.fontSize)
+  if (fontSize < shared.fontSize - 0.05) {
+    return { ...page, fontSize, scale }
+  }
+  return { ...shared, scale }
 }
 
 function rebuildShared(bucket: SharedBucket, caps: DocumentPageFitCaps): DocumentPageFitStyle | null {

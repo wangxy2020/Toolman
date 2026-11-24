@@ -1,5 +1,8 @@
-import type { Assistant, Provider } from '@toolman/shared'
+import type { Assistant, Provider, Session } from '@toolman/shared'
 import { isChatModelEntry } from '@toolman/shared'
+import {
+  resolveGroupProxyAssistantModelId,
+} from '../group/group-agent-utils'
 
 export const MAX_PARALLEL_MODELS = 4
 
@@ -146,20 +149,95 @@ export function normalizeModelIds(
   assistants: Assistant[],
   preferredModelId?: string | null,
 ): string[] {
-  const assistantModelId = resolvePrimaryAssistant(assistants)?.modelId?.trim()
   const valid = modelIds.filter((id) => isModelIdAvailable(id, providers))
+  // Keep an explicit valid selection (course / header / multi-model). Only fall
+  // back when nothing selectable remains — do not silently force the assistant
+  // model over a different available choice.
+  if (valid.length > 0) return valid.slice(0, MAX_PARALLEL_MODELS)
+  return pickDefaultModelIds(assistants, providers, preferredModelId)
+}
 
+export function isUnconfiguredModelId(modelId: string | null | undefined): boolean {
+  const name = modelNameFromId(modelId?.trim())
+  return !name || name === UNCONFIGURED_MODEL_NAME
+}
+
+function isConfiguredAssistantModelId(modelId: string | null | undefined): modelId is string {
+  const trimmed = modelId?.trim()
+  if (!trimmed) return false
+  return !isUnconfiguredModelId(trimmed)
+}
+
+/**
+ * Agent-page breadcrumb / settings-aligned display:
+ * group proxy → assistant settings model → header selection.
+ * Seed `unconfigured` is not treated as a settings model (falls through to
+ * selectedModelIds, which the page heals onto a real default).
+ */
+export function resolveHeaderChatModelIds(options: {
+  activeSession?: Session | null
+  activeAssistant?: Assistant | null
+  selectedModelIds: string[]
+  groupProxyMode?: boolean
+}): string[] {
+  const {
+    activeSession,
+    activeAssistant,
+    selectedModelIds,
+    groupProxyMode = false,
+  } = options
+
+  if (groupProxyMode && activeAssistant) {
+    const modelId = resolveGroupProxyAssistantModelId(activeAssistant, activeSession).trim()
+    return modelId ? [modelId] : selectedModelIds
+  }
+
+  // Path always mirrors the active agent's settings model (including unavailable
+  // / retired provider ids), so switching agents never keeps the previous label.
+  if (isConfiguredAssistantModelId(activeAssistant?.modelId)) {
+    return [activeAssistant.modelId.trim()]
+  }
+  return selectedModelIds.length > 0 ? selectedModelIds : []
+}
+
+/**
+ * Model used for generation:
+ * group proxy → assistant settings → header selection.
+ * Course topics follow the shared「课堂」agent model (no per-course override).
+ */
+export function resolveEffectiveChatModelIds(options: {
+  activeSession?: Session | null
+  activeAssistant?: Assistant | null
+  providers: Provider[]
+  selectedModelIds: string[]
+  groupProxyMode?: boolean
+}): string[] {
+  const {
+    activeSession,
+    activeAssistant,
+    providers,
+    selectedModelIds,
+    groupProxyMode = false,
+  } = options
+
+  if (groupProxyMode && activeAssistant) {
+    const modelId = resolveGroupProxyAssistantModelId(activeAssistant, activeSession).trim()
+    return modelId ? [modelId] : selectedModelIds
+  }
+
+  const assistantModelId = activeAssistant?.modelId?.trim()
   if (
-    assistantModelId &&
+    isConfiguredAssistantModelId(assistantModelId) &&
     isModelIdAvailable(assistantModelId, providers) &&
-    valid.length === 1 &&
-    valid[0] !== assistantModelId
+    selectedModelIds.length <= 1
   ) {
     return [assistantModelId]
   }
-
-  if (valid.length > 0) return valid.slice(0, MAX_PARALLEL_MODELS)
-  return pickDefaultModelIds(assistants, providers, preferredModelId)
+  // Prefer the assistant's configured model even when the provider list is stale.
+  if (isConfiguredAssistantModelId(assistantModelId) && selectedModelIds.length <= 1) {
+    return [assistantModelId]
+  }
+  return selectedModelIds
 }
 
 export function toggleModelId(current: string[], modelId: string): string[] {

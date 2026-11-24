@@ -30,6 +30,36 @@ export function isAssistantLibAssistantName(name: string | null | undefined): bo
   return (ASSISTANT_LIB_ASSISTANT_NAME_LEGACY as readonly string[]).includes(trimmed)
 }
 
+/**
+ * Prefer a single shared「课堂」agent when duplicates exist.
+ * Pick the owner of the most recently updated course topic, else the first match.
+ */
+export function resolveCanonicalAssistantLibAssistant<
+  T extends { id: string; name: string },
+  S extends { assistantId?: string | null; updatedAt: number; metadata?: Record<string, unknown> | null },
+>(assistants: T[], sessions: S[] = []): T | null {
+  const classroomAssistants = assistants.filter((item) => isAssistantLibAssistantName(item.name))
+  if (classroomAssistants.length === 0) return null
+  if (classroomAssistants.length === 1) return classroomAssistants[0] ?? null
+
+  const classroomIds = new Set(classroomAssistants.map((item) => item.id))
+  const latestCourse = [...sessions]
+    .filter(
+      (session) =>
+        Boolean(session.assistantId && classroomIds.has(session.assistantId)) &&
+        Boolean(parseAssistantLibSessionMeta(session.metadata)),
+    )
+    .sort((left, right) => right.updatedAt - left.updatedAt)[0]
+  if (latestCourse?.assistantId) {
+    return (
+      classroomAssistants.find((item) => item.id === latestCourse.assistantId) ??
+      classroomAssistants[0] ??
+      null
+    )
+  }
+  return classroomAssistants[0] ?? null
+}
+
 /** Legacy per-course teaching agents (pre shared「课堂」agent). */
 export function isLegacyPerCourseTeachingAssistant(assistant: {
   name: string

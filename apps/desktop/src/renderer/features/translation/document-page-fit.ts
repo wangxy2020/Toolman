@@ -149,7 +149,7 @@ export function isNegligibleDocumentFitBoxChange(
   return Math.abs(boxWidth - measured.boxWidth) < 2 && Math.abs(boxHeight - measured.boxHeight) < 2
 }
 
-/** Remount can reuse a saved fit when the page box and 字号 cap still match. */
+/** Remount can reuse a saved fit when the width bucket and height still match. */
 export function canReuseDocumentPageFit(
   saved: DocumentPageFitRecord | null | undefined,
   boxWidth: number,
@@ -157,9 +157,12 @@ export function canReuseDocumentPageFit(
   caps: DocumentPageFitCaps = DOCUMENT_PAGE_FIT_PROSE_CAPS,
 ): boolean {
   if (!saved || saved.boxWidth < 1 || saved.boxHeight < 1) return false
-  if (!isNegligibleDocumentFitBoxChange(saved, boxWidth, boxHeight)) return false
-  if (saved.fontSize > caps.fontMax + 0.15) return false
-  if (saved.fontSize < caps.fontMin - 0.15) return false
+  if (shouldRemeasureDocumentPageFitForWidth(saved.boxWidth, boxWidth)) return false
+  // Height still needs to be close — overflow fit depends on it.
+  if (Math.abs(boxHeight - saved.boxHeight) >= 24) return false
+  const widthCaps = resolveDocumentPageFitCapsForWidth(boxWidth, caps)
+  if (saved.fontSize > widthCaps.fontMax + 0.15) return false
+  if (saved.fontSize < widthCaps.fontMin - 0.15) return false
   // Old fits that crushed with scale < 0.85 must remeasure for readability.
   if (saved.scale < DOCUMENT_FIT_SCALE_MIN - 0.01) return false
   return true
@@ -222,41 +225,57 @@ export function writeDocumentPageFitMarkdown(body: string, fit: DocumentPageFitR
 }
 
 /**
- * Derive 字号 caps from pane width so small windows stay compact and wide
- * windows stay readable (fixed 12–15px looked huge in a narrow column and tiny
- * after maximize).
+ * Only two layout sizes matter for 字号: default window vs maximized.
+ * Continuous width interpolation caused many visible steps while dragging.
+ */
+export type DocumentPageFitWidthBucket = 'default' | 'maximized'
+
+/** Page-pane widths at/above this are treated as the maximized layout. */
+export const DOCUMENT_FIT_MAXIMIZED_WIDTH = 640
+
+export function resolveDocumentPageFitWidthBucket(
+  boxWidth: number,
+): DocumentPageFitWidthBucket {
+  return (boxWidth || 0) >= DOCUMENT_FIT_MAXIMIZED_WIDTH ? 'maximized' : 'default'
+}
+
+/**
+ * Discrete 字号 caps for default vs maximized — no in-between steps.
+ * Maximized is slightly larger so the wide pane stays readable.
  */
 export function resolveDocumentPageFitCapsForWidth(
   boxWidth: number,
   base: DocumentPageFitCaps = DOCUMENT_PAGE_FIT_PROSE_CAPS,
 ): DocumentPageFitCaps {
-  const width = Math.max(160, boxWidth || 520)
-  // 280px → compact; 520px → base; 760px+ → slightly larger.
-  const t = Math.max(0, Math.min(1, (width - 280) / 480))
-  const fontMax = round1(base.fontMax - 3 + t * 5) // prose: 12→17 around base 15
-  const fontMin = round1(base.fontMin - 2 + t * 3) // prose: 10→13 around base 12
+  const bucket = resolveDocumentPageFitWidthBucket(boxWidth)
+  if (bucket === 'default') {
+    return { ...base }
+  }
   return {
-    fontMax: Math.max(fontMin + 1, fontMax),
-    fontMin: Math.max(9, Math.min(fontMin, fontMax - 1)),
+    fontMax: round1(base.fontMax + 2),
+    fontMin: round1(base.fontMin + 1),
     lineMax: base.lineMax,
     lineMin: base.lineMin,
-    padMax: Math.max(base.padMin, Math.round(base.padMax - 4 + t * 6)),
-    padMin: Math.max(4, Math.round(base.padMin - 2 + t * 3)),
+    padMax: base.padMax + 2,
+    padMin: base.padMin + 1,
   }
 }
 
-/** True when the pane width changed enough that 字号 should be remeasured. */
+/** Remeasure 字号 only when crossing default ↔ maximized. */
 export function shouldRemeasureDocumentPageFitForWidth(
   previousWidth: number,
   nextWidth: number,
 ): boolean {
   if (previousWidth < 1 || nextWidth < 1) return true
-  return Math.abs(nextWidth - previousWidth) >= 48
+  return (
+    resolveDocumentPageFitWidthBucket(previousWidth) !==
+    resolveDocumentPageFitWidthBucket(nextWidth)
+  )
 }
 
 /**
- * On small width changes keep type; on larger width jumps, clamp into the
- * width-aware caps so maximize/minimize rebalance without a full remount.
+ * Same bucket → keep type. Cross default/maximized → remap within the new caps
+ * (one step, not a continuous scale with the drag).
  */
 export function scaleDocumentPageFitForBox(
   saved: DocumentPageFitRecord,
@@ -265,18 +284,22 @@ export function scaleDocumentPageFitForBox(
   caps: DocumentPageFitCaps = DOCUMENT_PAGE_FIT_PROSE_CAPS,
 ): DocumentPageFitStyle {
   const widthCaps = resolveDocumentPageFitCapsForWidth(boxWidth, caps)
+  const scale =
+    saved.scale >= DOCUMENT_FIT_SCALE_MIN ? Math.min(1, saved.scale) : 1
   if (!shouldRemeasureDocumentPageFitForWidth(saved.boxWidth, boxWidth)) {
     return {
       fontSize: Math.max(widthCaps.fontMin, Math.min(widthCaps.fontMax, round1(saved.fontSize))),
       lineHeight: saved.lineHeight,
       padding: Math.max(widthCaps.padMin, Math.min(widthCaps.padMax, Math.round(saved.padding))),
-      scale: saved.scale >= DOCUMENT_FIT_SCALE_MIN ? Math.min(1, saved.scale) : 1,
+      scale,
     }
   }
-  // Width jumped — scale previous 字号 by the pane width ratio, then clamp.
-  const ratio =
-    saved.boxWidth > 1 ? Math.max(0.72, Math.min(1.35, boxWidth / saved.boxWidth)) : 1
-  const nextFont = round1(saved.fontSize * ratio)
+  const previousCaps = resolveDocumentPageFitCapsForWidth(saved.boxWidth, caps)
+  const span = Math.max(0.01, previousCaps.fontMax - previousCaps.fontMin)
+  const t = Math.max(0, Math.min(1, (saved.fontSize - previousCaps.fontMin) / span))
+  const nextFont = round1(
+    widthCaps.fontMin + t * (widthCaps.fontMax - widthCaps.fontMin),
+  )
   return {
     fontSize: Math.max(widthCaps.fontMin, Math.min(widthCaps.fontMax, nextFont)),
     lineHeight: saved.lineHeight,

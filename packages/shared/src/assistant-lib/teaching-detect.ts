@@ -40,7 +40,15 @@ export function resolveAssistantLibSessionModelId(
   metadata: Record<string, unknown> | undefined | null,
 ): string | null {
   const modelId = parseAssistantLibSessionMeta(metadata)?.modelId?.trim()
-  return modelId || null
+  if (modelId) return modelId
+  if (!metadata) return null
+  const raw = metadata[ASSISTANT_LIB_SESSION_METADATA_KEY]
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const record = raw as Record<string, unknown>
+  if (record.enabled !== true) return null
+  if (typeof record.presetId !== 'string' || !record.presetId.trim()) return null
+  const loose = typeof record.modelId === 'string' ? record.modelId.trim() : ''
+  return loose || null
 }
 
 export function isAssistantLibSession(metadata: Record<string, unknown> | undefined | null): boolean {
@@ -89,29 +97,84 @@ export function assistantLibSessionMetadataPatch(
       ...(patch.textbookLocalPath?.trim()
         ? { textbookLocalPath: patch.textbookLocalPath.trim() }
         : {}),
-      ...(typeof patch.autoSpeak === 'boolean' ? { autoSpeak: patch.autoSpeak } : {}),
-      ...(patch.ttsEngine ? { ttsEngine: patch.ttsEngine } : {}),
-      ...(patch.ttsVoice?.trim() ? { ttsVoice: patch.ttsVoice.trim() } : {}),
+      ...(typeof patch.autoSpeak === 'boolean'
+        ? { autoSpeak: patch.autoSpeak }
+        : typeof previous?.autoSpeak === 'boolean'
+          ? { autoSpeak: previous.autoSpeak }
+          : {}),
+      ...(patch.ttsEngine
+        ? { ttsEngine: patch.ttsEngine }
+        : previous?.ttsEngine
+          ? { ttsEngine: previous.ttsEngine }
+          : {}),
+      ...(patch.ttsVoice?.trim()
+        ? { ttsVoice: patch.ttsVoice.trim() }
+        : previous?.ttsVoice?.trim()
+          ? { ttsVoice: previous.ttsVoice.trim() }
+          : {}),
       ...(nextModelId ? { modelId: nextModelId } : {}),
     },
     socraticState: metadata?.socraticState ?? EMPTY_SOCRATIC_STATE,
   }
 }
 
-/** Resolve classroom TTS; assistant-lib defaults autoSpeak to on. */
-export function resolveAssistantLibSessionTts(
-  metadata: Record<string, unknown> | undefined | null,
-): {
+export type ResolvedChatTts = {
   autoSpeak: boolean
   ttsEngine: 'edge' | 'web-speech'
   ttsVoice: string | undefined
-} | null {
-  const meta = parseAssistantLibSessionMeta(metadata)
-  if (!meta) return null
+}
+
+function resolveTtsFromAssistantLibRaw(
+  raw: Record<string, unknown>,
+): ResolvedChatTts | null {
+  // Course topics always carry enabled + presetId; keep TTS readable even when
+  // unrelated syllabus fields fail the strict session meta schema.
+  if (raw.enabled !== true) return null
+  if (typeof raw.presetId !== 'string' || !raw.presetId.trim()) return null
   return {
-    autoSpeak: meta.autoSpeak ?? true,
-    ttsEngine: meta.ttsEngine === 'web-speech' ? 'web-speech' : 'edge',
-    ttsVoice: meta.ttsVoice,
+    autoSpeak: typeof raw.autoSpeak === 'boolean' ? raw.autoSpeak : true,
+    ttsEngine: raw.ttsEngine === 'web-speech' ? 'web-speech' : 'edge',
+    ttsVoice:
+      typeof raw.ttsVoice === 'string' && raw.ttsVoice.trim()
+        ? raw.ttsVoice.trim()
+        : undefined,
+  }
+}
+
+/** Resolve classroom TTS; assistant-lib defaults autoSpeak to on. */
+export function resolveAssistantLibSessionTts(
+  metadata: Record<string, unknown> | undefined | null,
+): ResolvedChatTts | null {
+  const meta = parseAssistantLibSessionMeta(metadata)
+  if (meta) {
+    return {
+      autoSpeak: meta.autoSpeak ?? true,
+      ttsEngine: meta.ttsEngine === 'web-speech' ? 'web-speech' : 'edge',
+      ttsVoice: meta.ttsVoice,
+    }
+  }
+  if (!metadata) return null
+  const raw = metadata[ASSISTANT_LIB_SESSION_METADATA_KEY]
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  return resolveTtsFromAssistantLibRaw(raw as Record<string, unknown>)
+}
+
+/**
+ * Effective chat TTS: course session settings win over the shared 课堂 agent.
+ * Only fall back to assistant parameters when the active topic is not a course.
+ */
+export function resolveEffectiveChatTts(options: {
+  sessionMetadata?: Record<string, unknown> | null
+  assistantAutoSpeak?: boolean | null
+  assistantTtsEngine?: 'edge' | 'web-speech' | null
+  assistantTtsVoice?: string | null
+}): ResolvedChatTts {
+  const course = resolveAssistantLibSessionTts(options.sessionMetadata)
+  if (course) return course
+  return {
+    autoSpeak: Boolean(options.assistantAutoSpeak),
+    ttsEngine: options.assistantTtsEngine === 'web-speech' ? 'web-speech' : 'edge',
+    ttsVoice: options.assistantTtsVoice?.trim() || undefined,
   }
 }
 

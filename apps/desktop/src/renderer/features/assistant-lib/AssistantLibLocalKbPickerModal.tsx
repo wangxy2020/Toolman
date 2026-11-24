@@ -5,21 +5,15 @@ import {
   type KnowledgeDocument,
 } from '@toolman/shared'
 import { useI18n } from '../../i18n/useI18n'
-import { getKnowledgeSidebarSectionLabel } from '../../i18n/knowledge-sidebar-labels'
-import type { TranslateFn } from '../../i18n/I18nProvider'
-import { translateKnowledgeFolderName } from '../../i18n/system-labels'
-import { filterAgentBindableKnowledgeBases } from '../knowledge/agent-knowledge-bind'
 import {
   formatKnowledgeFileSize,
   getKnowledgeDocStatusLabel,
 } from '../knowledge/knowledge-file-display'
 import { buildStoragePathForKb } from '../knowledge/knowledge-import-paths'
-import {
-  knowledgeSectionForKind,
-  SYSTEM_DEFAULT_FOLDER_KB_NAMES,
-} from '../knowledge/knowledge-sidebar-types'
+import { filterAgentBindableKnowledgeBases } from '../knowledge/agent-knowledge-bind'
 import { GroupResourcePickerModal } from '../group/GroupResourcePickerModal'
 import type { GroupPickerGroup, GroupPickerSelection } from '../group/group-resource-picker-types'
+import { buildClassroomKbPickerGroups } from './assistant-lib-kb-picker-groups'
 
 type Props = {
   workspaceId: string
@@ -36,14 +30,6 @@ export function resolveTextbookKbDisplayPath(
 ): string {
   if (kb.kind === 'local') {
     return buildStoragePathForKb(defaultLocalFolderPath, kb.name) ?? kb.name
-  }
-  return kb.name
-}
-
-function resolveClassroomKbLabel(kb: KnowledgeBase, t: TranslateFn): string {
-  if (SYSTEM_DEFAULT_FOLDER_KB_NAMES.has(kb.name)) {
-    const folderName = translateKnowledgeFolderName(kb.name, t)
-    return `${getKnowledgeSidebarSectionLabel(knowledgeSectionForKind(kb.kind), t)} · ${folderName}`
   }
   return kb.name
 }
@@ -66,23 +52,22 @@ export function AssistantLibLocalKbPickerModal({
     [knowledgeBases],
   )
 
-  const groups = useMemo<GroupPickerGroup[]>(() => {
-    return availableBases.map((kb) => {
-      const loadedItems = loadedDocs[kb.id]
-      const remainingCount = loadedItems != null ? loadedItems.length : kb.documentCount
-      return {
-        id: kb.id,
-        name: resolveClassroomKbLabel(kb, t),
-        description: t('assistantLibPage.pickLocalKbDocCount', { count: remainingCount }),
-        groupSelectable: loadedItems == null && remainingCount > 0,
-        selectableCount: remainingCount,
-        items: loadedItems ?? [],
-      }
-    })
-  }, [availableBases, loadedDocs, t])
+  const groups = useMemo(
+    () =>
+      buildClassroomKbPickerGroups({
+        knowledgeBases: availableBases,
+        loadedDocs,
+        docCountLabel: (count) => t('assistantLibPage.pickLocalKbDocCount', { count }),
+        sectionCountLabel: (count) =>
+          t('assistantLibPage.pickLocalKbSectionCount', { count }),
+        t,
+      }),
+    [availableBases, loadedDocs, t],
+  )
 
   const loadDocuments = useCallback(
     async (knowledgeBaseId: string) => {
+      if (knowledgeBaseId.startsWith('section:')) return
       if (Object.hasOwn(loadedDocs, knowledgeBaseId)) return
 
       setLoadingKbId(knowledgeBaseId)

@@ -89,6 +89,17 @@ export function useSessionManager(
     return updated
   }, [])
 
+  /** Patch one session in memory (e.g. course TTS settings) without a full list reload. */
+  const upsertSession = useCallback((session: Session) => {
+    setSessions((prev) => {
+      const index = prev.findIndex((item) => item.id === session.id)
+      if (index < 0) return [session, ...prev]
+      const next = [...prev]
+      next[index] = session
+      return next
+    })
+  }, [])
+
   const deleteSession = useCallback(
     async (sessionId: string) => {
       const result = await window.api.invoke(IpcChannel.SessionDelete, { id: sessionId })
@@ -155,6 +166,7 @@ export function useSessionManager(
     selectSession,
     clearActiveSession,
     renameSession,
+    upsertSession,
     deleteSession,
   }
 }

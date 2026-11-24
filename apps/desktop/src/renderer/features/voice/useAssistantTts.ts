@@ -64,6 +64,11 @@ export function useAssistantTts(options: {
       .find((message) => message.role === 'assistant' && message.status === 'streaming')
 
     if (streaming) {
+      // Optimistic temp ids are remapped to server ids mid-stream — rebind so TTS
+      // does not stop() and restart (which killed classroom auto-speak).
+      if (streamingIdRef.current && streamingIdRef.current !== streaming.id) {
+        controller.rebindStreamMessageId(streaming.id)
+      }
       streamingIdRef.current = streaming.id
       configureSharedTts({ engine, voice })
       controller.feedStreamText(streaming.id, getUserFacingMessageText(streaming))
@@ -74,12 +79,33 @@ export function useAssistantTts(options: {
     if (!previousStreamingId) return
     streamingIdRef.current = null
 
-    const finished = options.messages.find((message) => message.id === previousStreamingId)
+    let finished = options.messages.find((message) => message.id === previousStreamingId)
+    if (!finished) {
+      // Same assistant row may already carry the remapped real id.
+      finished = [...options.messages]
+        .reverse()
+        .find(
+          (message) =>
+            message.role === 'assistant' &&
+            (message.status === 'completed' || message.status === 'streaming'),
+        )
+    }
     if (!finished) {
       controller.stop()
       return
     }
+    if (finished.status === 'streaming') {
+      streamingIdRef.current = finished.id
+      controller.rebindStreamMessageId(finished.id)
+      configureSharedTts({ engine, voice })
+      controller.feedStreamText(finished.id, getUserFacingMessageText(finished))
+      return
+    }
     if (finished.status === 'completed') {
+      configureSharedTts({ engine, voice })
+      // Final feed covers text that arrived in the same tick as message.done.
+      controller.rebindStreamMessageId(finished.id)
+      controller.feedStreamText(finished.id, getUserFacingMessageText(finished))
       controller.endStream(finished.id)
       return
     }

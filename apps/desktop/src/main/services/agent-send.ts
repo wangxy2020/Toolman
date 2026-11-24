@@ -4,6 +4,7 @@ import {
   buildStoredUserContent,
   buildMessageTaskMetadata,
   MessageSendInputSchema,
+  isAssistantLibSession,
   isDefaultSessionTitle,
 } from '@toolman/shared'
 import { createMessageRepository, createSessionRepository, runInTransaction } from '@toolman/db'
@@ -106,7 +107,13 @@ export async function sendMessage(input: unknown) {
     const sessions = createSessionRepository(tx)
     const messages = createMessageRepository(tx)
 
-    if (isDefaultSessionTitle(session.title) && session.messageCount === 0) {
+    // Never auto-rename classroom course topics from the first user message
+    // (e.g.「开始上课…」); those titles come from the course name.
+    if (
+      isDefaultSessionTitle(session.title) &&
+      session.messageCount === 0 &&
+      !isAssistantLibSession(session.metadata)
+    ) {
       sessions.update(session.id, { title: deriveSessionTitle(userText) })
     }
 

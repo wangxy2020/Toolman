@@ -51,9 +51,9 @@ export function useAssistantLibPageClass(options: {
       return
     }
     await props.chat.loadSessions()
-    if (props.chat.activeSessionId !== session.id) {
-      await props.chat.selectSession(session.id)
-    }
+    // Always re-select the course topic before send — do not trust a stale
+    // activeSessionId closure, or messages land on a blank「开始上课…」shell.
+    await props.chat.selectSession(session.id)
     setAssistantLibPanelView('agent')
     await props.chat.sendMessage([
       {

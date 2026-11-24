@@ -96,7 +96,8 @@ export function draftFromSession(
     autoSpeak: meta?.autoSpeak ?? true,
     ttsEngine: meta?.ttsEngine === 'web-speech' ? 'web-speech' : 'edge',
     ttsVoice: resolveCuratedEdgeTtsVoice(meta?.ttsVoice),
-    modelId: meta?.modelId?.trim() ?? '',
+    // Model is owned by the shared「课堂」agent — not stored per course.
+    modelId: '',
   }
 }
 
@@ -191,7 +192,8 @@ export function buildClassroomSettingsMetadata(
     autoSpeak: draft.autoSpeak,
     ttsEngine: draft.ttsEngine,
     ttsVoice: draft.ttsEngine === 'edge' ? resolveCuratedEdgeTtsVoice(draft.ttsVoice) : undefined,
-    modelId: draft.modelId.trim(),
+    // Clear legacy per-course model so chats follow the classroom agent setting.
+    modelId: '',
     ...(syllabus ? { syllabus } : {}),
   })
   if (!syllabus) return metadata

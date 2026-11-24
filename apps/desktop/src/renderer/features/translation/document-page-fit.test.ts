@@ -51,13 +51,16 @@ describe('document page fit', () => {
     expect(tighter.lineHeight).toBeLessThanOrEqual(current.lineHeight)
   })
 
-  it('uses smaller 字号 caps in a narrow pane and larger caps when wide', () => {
-    const narrow = resolveDocumentPageFitCapsForWidth(280)
-    const wide = resolveDocumentPageFitCapsForWidth(760)
-    expect(narrow.fontMax).toBeLessThan(wide.fontMax)
-    expect(narrow.fontMin).toBeLessThanOrEqual(wide.fontMin)
-    expect(narrow.fontMax).toBeLessThan(DOCUMENT_FIT_FONT_MAX)
-    expect(wide.fontMax).toBeGreaterThan(DOCUMENT_FIT_FONT_MAX)
+  it('uses only two 字号 caps: default window vs maximized', () => {
+    const defaultA = resolveDocumentPageFitCapsForWidth(400)
+    const defaultB = resolveDocumentPageFitCapsForWidth(600)
+    const maximized = resolveDocumentPageFitCapsForWidth(760)
+    expect(defaultA).toEqual(defaultB)
+    expect(defaultA.fontMax).toBe(DOCUMENT_FIT_FONT_MAX)
+    expect(defaultA.fontMin).toBe(DOCUMENT_FIT_FONT_MIN)
+    expect(maximized.fontMax).toBe(DOCUMENT_FIT_FONT_MAX + 2)
+    expect(maximized.fontMin).toBe(DOCUMENT_FIT_FONT_MIN + 1)
+    expect(maximized.fontMax).toBeGreaterThan(defaultA.fontMax)
   })
 
   it('caps parsed tables at 12px so a full grid can still fit the page', () => {
@@ -110,7 +113,7 @@ describe('document page fit', () => {
     })
   })
 
-  it('scales 字号 up when the pane becomes much wider', () => {
+  it('steps 字号 once when crossing default → maximized', () => {
     const scaled = scaleDocumentPageFitForBox(
       {
         fontSize: 13,
@@ -129,7 +132,7 @@ describe('document page fit', () => {
     expect(scaled.scale).toBe(1)
   })
 
-  it('keeps 字号 when the pane width only wobbles slightly', () => {
+  it('keeps 字号 for width changes inside the same window bucket', () => {
     const scaled = scaleDocumentPageFitForBox(
       {
         fontSize: 13,
@@ -139,7 +142,7 @@ describe('document page fit', () => {
         boxWidth: 400,
         boxHeight: 600,
       },
-      430,
+      560,
       610,
     )
     expect(scaled.fontSize).toBe(13)
@@ -154,7 +157,7 @@ describe('document page fit', () => {
     ).toBe(false)
   })
 
-  it('reuses a saved fit when the page box and 字号 cap still match', () => {
+  it('reuses a saved fit within the same window bucket', () => {
     const saved = {
       fontSize: 12,
       lineHeight: 1.35,
@@ -164,10 +167,11 @@ describe('document page fit', () => {
       boxHeight: 600,
     }
     expect(canReuseDocumentPageFit(saved, 401, 599, DOCUMENT_PAGE_FIT_TABLE_CAPS)).toBe(true)
+    expect(canReuseDocumentPageFit(saved, 560, 600, DOCUMENT_PAGE_FIT_TABLE_CAPS)).toBe(true)
     expect(canReuseDocumentPageFit({ ...saved, fontSize: 18 }, 400, 600, DOCUMENT_PAGE_FIT_TABLE_CAPS)).toBe(
       false,
     )
-    expect(canReuseDocumentPageFit(saved, 480, 600, DOCUMENT_PAGE_FIT_TABLE_CAPS)).toBe(false)
+    expect(canReuseDocumentPageFit(saved, 720, 600, DOCUMENT_PAGE_FIT_TABLE_CAPS)).toBe(false)
   })
 
   it('treats nearby fit measurements as the same record', () => {

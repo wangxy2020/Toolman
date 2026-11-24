@@ -111,7 +111,7 @@ describe('document-page-bodies', () => {
     ).toBe('# Live')
   })
 
-  it('fills empty translating shells from the snapshot body but not done shells', () => {
+  it('fills empty translating and done shells from the snapshot body', () => {
     const body = snapshotToPageBody({
       pageNumber: 1,
       sourceText: 'src',
@@ -132,7 +132,8 @@ describe('document-page-bodies', () => {
       body,
       true,
     )
-    expect(doneEmpty.translatedText).toBe('')
+    expect(doneEmpty.translatedText.length).toBeGreaterThan(0)
+    expect(doneEmpty.status).toBe('done')
 
     const doneChinese = resolvePageForDisplay(
       { pageNumber: 1, sourceText: '', translatedText: '中文译文', parsedMarkdown: '<p>parsed</p>', status: 'done' },
@@ -141,6 +142,18 @@ describe('document-page-bodies', () => {
     )
     expect(doneChinese.translatedText).toBe('中文译文')
     expect(doneChinese.parsedMarkdown).toBe('<p>parsed</p>')
+  })
+
+  it('keeps Chinese plain on done HTML snapshots for reopen', () => {
+    const body = snapshotToPageBody({
+      pageNumber: 1,
+      sourceText: 'Hello',
+      translatedText: '你好',
+      parsedMarkdown: '<table><tr><td>Hello</td></tr></table>',
+      status: 'done',
+    })
+    expect(body?.plain).toBe('你好')
+    expect(body?.markdown).toContain('<table')
   })
 
   it('keeps both translation and parse markdown so modes can switch', () => {

@@ -1,3 +1,10 @@
+import {
+  IpcChannel,
+  isAssistantLibAssistantName,
+  isAssistantLibSession,
+  type Session,
+} from '@toolman/shared'
+import { healClassroomChatOrphans } from '../assistant-lib/classroom-session-binding'
 import { MiddleSidebar } from '../../components/layout/MiddleSidebar'
 import { KnowledgeSidebar } from '../knowledge/KnowledgeSidebar'
 import { NotesSidebar } from '../notes/NotesSidebar'
@@ -71,6 +78,69 @@ export function ChatPageSidebars(props: ChatPageSidebarsProps) {
         activeSessionId={chat.activeSessionId}
         sessionsLoading={chat.sessionsLoading}
         onSelectSession={chat.selectSession}
+        onSelectAssistant={(assistantId) => {
+          void (async () => {
+            const assistant = sidebarAssistants.find((item) => item.id === assistantId)
+            if (!assistant) return
+            const isClassroom = isAssistantLibAssistantName(assistant.name)
+            if (isClassroom) {
+              const items = await chat.loadSessions()
+              const healed = await healClassroomChatOrphans({
+                classroomAssistantId: assistant.id,
+                sessions: items.length > 0 ? items : chat.sessions,
+                updateSession: async (sessionId, patch) => {
+                  const result = await window.api.invoke(IpcChannel.SessionUpdate, {
+                    id: sessionId,
+                    title: patch.title,
+                    metadata: patch.metadata,
+                  })
+                  if (!result.ok) return null
+                  const session = result.data as Session
+                  chat.upsertSession(session)
+                  return session
+                },
+                deleteSession: async (sessionId) => {
+                  const result = await window.api.invoke(IpcChannel.SessionDelete, {
+                    id: sessionId,
+                  })
+                  if (!result.ok) return false
+                  await chat.loadSessions()
+                  return true
+                },
+              })
+              if (healed.healed) {
+                await chat.loadSessions()
+                if (healed.keepSessionId) {
+                  await chat.selectSession(healed.keepSessionId)
+                  return
+                }
+              }
+            }
+            const topics = (
+              isClassroom
+                ? chat.sessions.filter(
+                    (session) =>
+                      session.assistantId === assistantId ||
+                      isAssistantLibSession(session.metadata),
+                  )
+                : chat.sessions.filter((session) => session.assistantId === assistantId)
+            ).sort((left, right) => right.updatedAt - left.updatedAt)
+            if (
+              chat.activeSessionId &&
+              topics.some((session) => session.id === chat.activeSessionId)
+            ) {
+              return
+            }
+            const latest = topics[0]
+            if (latest) {
+              await chat.selectSession(latest.id)
+              return
+            }
+            if (!isClassroom) {
+              await chat.createSession(assistantId)
+            }
+          })()
+        }}
         onCreateSession={(assistantId) => void chat.createSession(assistantId)}
         onRenameSession={(id, title) => void chat.renameSession(id, title)}
         onDeleteSession={(id) => void chat.deleteSession(id)}

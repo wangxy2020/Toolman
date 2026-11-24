@@ -78,10 +78,9 @@ export function AssistantLibSettingsBasicTab({
                         <select
                           id="alib-settings-model"
                           className="tm-kb-settings-input"
-                          value={draft.modelId}
+                          value={draft.modelId || modelOptions[0]?.modelId || ''}
                           onChange={(event) => updateDraft({ modelId: event.target.value })}
                         >
-                          <option value="">{t('assistantLibPage.courseModelDefault')}</option>
                           {modelOptions.map((opt) => (
                             <option key={opt.modelId} value={opt.modelId}>
                               {opt.label}

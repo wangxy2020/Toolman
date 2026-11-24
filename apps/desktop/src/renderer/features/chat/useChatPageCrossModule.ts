@@ -23,7 +23,7 @@ export function useChatPageCrossModule(deps: {
   appSettings?: AppSettings
   updateAppSettings?: (patch: Partial<AppSettings>) => void
 }) {
-  const assistant = useChatPageAssistant(deps.chat, deps.messageSettings)
+  const assistant = useChatPageAssistant(deps.chat, deps.messageSettings, deps.appSettings)
   const interop = useChatPageInterop({
     ...deps,
     activeAssistant: assistant.activeAssistant ?? undefined,

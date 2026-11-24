@@ -17,6 +17,13 @@ export interface GroupPickerGroup {
   groupSelectable?: boolean
   /** Item count when the group is selected before child rows are loaded. */
   selectableCount?: number
+  /**
+   * Knowledge-sidebar section header (本地/同步/网络…).
+   * Not selectable and not expandable — folders under it are separate groups.
+   */
+  sectionHeader?: boolean
+  /** Visual nest level under a section (0 = top-level / section). */
+  depth?: number
 }
 
 export interface GroupPickerSelection {

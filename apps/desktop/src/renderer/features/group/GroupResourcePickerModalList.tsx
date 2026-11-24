@@ -37,6 +37,26 @@ export function GroupResourcePickerModalList({
     <div className="tm-group-resource-picker-scroll">
       <ul className="tm-group-resource-picker-list">
         {groups.map((group) => {
+          const depth = group.depth ?? 0
+          const depthStyle = depth > 0 ? ({ ['--tm-picker-depth' as string]: String(depth) } as const) : undefined
+
+          if (group.sectionHeader) {
+            return (
+              <li
+                key={group.id}
+                className="tm-group-resource-picker-group tm-group-resource-picker-group--section"
+                style={depthStyle}
+              >
+                <div className="tm-group-resource-picker-group-header tm-group-resource-picker-group-header--section">
+                  <span className="tm-group-resource-picker-group-name">{group.name}</span>
+                  {group.description ? (
+                    <span className="tm-group-resource-picker-group-desc">{group.description}</span>
+                  ) : null}
+                </div>
+              </li>
+            )
+          }
+
           const expanded = expandedIds.has(group.id)
           const fullySelected = isGroupFullySelected(group)
           const partiallySelected = isGroupPartiallySelected(group)
@@ -48,9 +68,11 @@ export function GroupResourcePickerModalList({
               className={[
                 'tm-group-resource-picker-group',
                 group.disabled ? 'tm-group-resource-picker-group--disabled' : '',
+                depth > 0 ? 'tm-group-resource-picker-group--nested' : '',
               ]
                 .filter(Boolean)
                 .join(' ')}
+              style={depthStyle}
             >
               <div className="tm-group-resource-picker-group-header">
                 <button

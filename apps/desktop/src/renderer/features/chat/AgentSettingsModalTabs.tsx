@@ -1,6 +1,11 @@
-import type { TranslationLanguage, VoiceTtsEngine } from '@toolman/shared'
+import { useMemo } from 'react'
+import { isAssistantLibAssistantName, type TranslationLanguage, type VoiceTtsEngine } from '@toolman/shared'
 import { CURATED_EDGE_TTS_VOICES } from '../voice/tts-provider-factory'
-import { formatModelDisplayLabel } from './model-utils'
+import {
+  formatModelDisplayLabel,
+  isUnconfiguredModelId,
+  modelNameFromId,
+} from './model-utils'
 import { TRANSLATION_LANGUAGE_OPTIONS } from './translation-utils'
 import {
   AgentSettingsHelpHint,
@@ -46,6 +51,14 @@ export function AgentSettingsModalBasicTab({ state }: { state: AgentSettingsStat
     updateTranslationLanguage,
   } = state
 
+  const modelSelectOptions = useMemo(() => {
+    if (!modelId || isUnconfiguredModelId(modelId)) return modelOptions
+    if (modelOptions.some((opt) => opt.modelId === modelId)) return modelOptions
+    const label = formatModelDisplayLabel(modelId, providers) || modelNameFromId(modelId)
+    return [{ modelId, label }, ...modelOptions]
+  }, [modelId, modelOptions, providers])
+  const modelSelectValue = isUnconfiguredModelId(modelId) ? '' : modelId
+
   return (
     <div className="tm-agent-settings-form">
       <div className="tm-agent-setting-row">
@@ -70,7 +83,13 @@ export function AgentSettingsModalBasicTab({ state }: { state: AgentSettingsStat
           <label className="tm-agent-setting-label" htmlFor="agent-settings-model">
             {t('agent.fields.model')}
           </label>
-          <AgentSettingsHelpHint title={t('agent.fields.modelHint')} />
+          <AgentSettingsHelpHint
+            title={
+              isAssistantLibAssistantName(assistant.name)
+                ? t('agent.fields.modelHintClassroom')
+                : t('agent.fields.modelHint')
+            }
+          />
         </div>
         {groupProxyMode ? (
           <input
@@ -84,15 +103,22 @@ export function AgentSettingsModalBasicTab({ state }: { state: AgentSettingsStat
           <select
             id="agent-settings-model"
             className="tm-agent-model-select"
-            value={modelId}
+            value={modelSelectValue}
             onChange={(e) => {
-              setModelId(e.target.value)
-              void save({ modelId: e.target.value })
+              const next = e.target.value
+              if (!next) return
+              setModelId(next)
+              void save({ modelId: next })
             }}
           >
-            {modelOptions.map((opt) => (
+            {isUnconfiguredModelId(modelId) || !modelSelectValue ? (
+              <option value="" disabled>
+                {t('agent.fields.selectModel')}
+              </option>
+            ) : null}
+            {modelSelectOptions.map((opt) => (
               <option key={opt.modelId} value={opt.modelId}>
-                {formatModelDisplayLabel(opt.modelId, providers)}
+                {formatModelDisplayLabel(opt.modelId, providers) || opt.label}
               </option>
             ))}
           </select>

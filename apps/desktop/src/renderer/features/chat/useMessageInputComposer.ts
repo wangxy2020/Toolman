@@ -10,6 +10,7 @@ import {
   readComposerText,
   shouldIgnoreComposerInput,
 } from './message-input-utils'
+import { unlockAudioPlayback } from '../voice/audio-unlock'
 
 interface Options {
   disabled: boolean
@@ -59,6 +60,8 @@ export function useMessageInputComposer({
 
   const sendWithOptions = useCallback(
     (contentBlocks: ContentBlock[]) => {
+      // Capture the send click so Edge auto-speak can play after async IPC.
+      unlockAudioPlayback()
       onSend(contentBlocks)
     },
     [onSend],

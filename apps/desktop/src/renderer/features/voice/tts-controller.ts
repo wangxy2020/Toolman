@@ -83,6 +83,23 @@ export class TtsController {
     this.queue.enqueueAll(parts.length > 0 ? parts : [clean])
   }
 
+  /**
+   * Keep the current auto-speak stream when chat remaps temp → real message ids.
+   * Without this, feedStreamText treats the real id as a new stream and stop()s audio.
+   */
+  rebindStreamMessageId(nextMessageId: string): void {
+    if (!nextMessageId || this.streamMessageId === nextMessageId) return
+    if (!this.streamMessageId) {
+      this.streamMessageId = nextMessageId
+      this.playingMessageId = nextMessageId
+      this.emit()
+      return
+    }
+    this.streamMessageId = nextMessageId
+    this.playingMessageId = nextMessageId
+    this.emit()
+  }
+
   /** Feed cumulative final-answer text for auto-speak streaming. */
   feedStreamText(messageId: string, cumulativeText: string): void {
     if (this.streamMessageId !== messageId) {
@@ -113,6 +130,11 @@ export class TtsController {
   }
 
   endStream(messageId: string): void {
+    if (this.streamMessageId && this.streamMessageId !== messageId) {
+      // Allow end after temp→real remap when UI still holds the old streaming id briefly.
+      this.streamMessageId = messageId
+      this.playingMessageId = messageId
+    }
     if (this.streamMessageId !== messageId) return
     const rest = this.splitter.flush()
     if (rest.length > 0) {

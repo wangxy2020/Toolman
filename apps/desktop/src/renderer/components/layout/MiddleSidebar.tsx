@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Assistant, Session } from '@toolman/shared'
 import {
+  isAssistantLibAssistantName,
+  isAssistantLibSession,
   isAutomationAssistantName,
   PROJECT_MANAGEMENT_ASSISTANT_NAME,
   sortProjectManagementSessionsByMenuOrder,
@@ -24,6 +26,8 @@ interface Props {
   activeSessionId: string | null
   sessionsLoading?: boolean
   onSelectSession: (id: string) => void
+  /** Switch to this agent by selecting its latest topic (or creating one). */
+  onSelectAssistant: (assistantId: string) => void
   onCreateSession: (assistantId?: string) => void
   onRenameSession: (id: string, title: string) => void
   onDeleteSession: (id: string) => void
@@ -75,17 +79,27 @@ function groupSessions(sessions: Session[], assistants: Assistant[]) {
 
 function sessionsForAssistant(
   assistant: Assistant,
-  sessions: Session[],
+  assistantSessions: Session[],
+  allSessions: Session[],
   linkedAutomationSessionIds: ReadonlySet<string> | null,
 ): Session[] {
   if (isAutomationAssistantName(assistant.name)) {
     if (!linkedAutomationSessionIds) return []
-    return sessions.filter((session) => linkedAutomationSessionIds.has(session.id))
+    return allSessions.filter((session) => linkedAutomationSessionIds.has(session.id))
   }
-  if (assistant.name !== PROJECT_MANAGEMENT_ASSISTANT_NAME) return sessions
+  // 课堂：课程话题 + 该智能体下的对话会话（上课消息常落在无课程 meta 的会话里）。
+  if (isAssistantLibAssistantName(assistant.name)) {
+    return allSessions
+      .filter(
+        (session) =>
+          session.assistantId === assistant.id || isAssistantLibSession(session.metadata),
+      )
+      .sort((left, right) => right.updatedAt - left.updatedAt)
+  }
+  if (assistant.name !== PROJECT_MANAGEMENT_ASSISTANT_NAME) return assistantSessions
   const menuOrder = readProjectSidebarMenuPreferences().order
   const order = menuOrder.length > 0 ? menuOrder : DEFAULT_SIDEBAR_MENU_ORDER
-  return sortProjectManagementSessionsByMenuOrder(sessions, order)
+  return sortProjectManagementSessionsByMenuOrder(assistantSessions, order)
 }
 
 export function MiddleSidebar({
@@ -94,6 +108,7 @@ export function MiddleSidebar({
   activeSessionId,
   sessionsLoading,
   onSelectSession,
+  onSelectAssistant,
   onCreateSession,
   onRenameSession,
   onDeleteSession,
@@ -118,8 +133,15 @@ export function MiddleSidebar({
 
   const activeAssistantId = useMemo(() => {
     if (!activeSessionId) return null
-    return sessions.find((s) => s.id === activeSessionId)?.assistantId ?? null
-  }, [activeSessionId, sessions])
+    const active = sessions.find((s) => s.id === activeSessionId) ?? null
+    if (!active?.assistantId) return null
+    // Highlight the visible「课堂」row even when the topic still points at a duplicate agent id.
+    if (isAssistantLibSession(active.metadata)) {
+      const classroom = assistants.find((item) => isAssistantLibAssistantName(item.name))
+      if (classroom) return classroom.id
+    }
+    return active.assistantId
+  }, [activeSessionId, assistants, sessions])
 
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [renameSessionId, setRenameSessionId] = useState<string | null>(null)
@@ -232,6 +254,7 @@ export function MiddleSidebar({
             const assistantSessions = sessionsForAssistant(
               assistant,
               map.get(assistant.id) ?? [],
+              sessions,
               linkedAutomationSessionIds,
             )
             const isOpen = expanded.has(assistant.id)
@@ -277,7 +300,15 @@ export function MiddleSidebar({
                       ]
                         .filter(Boolean)
                         .join(' ')}
-                      onClick={() => toggleExpanded(assistant.id)}
+                      onClick={() => {
+                        setExpanded((prev) => {
+                          if (prev.has(assistant.id)) return prev
+                          const next = new Set(prev)
+                          next.add(assistant.id)
+                          return next
+                        })
+                        onSelectAssistant(assistant.id)
+                      }}
                       onDoubleClick={(event) => {
                         if (!canRenameAssistant(assistant)) return
                         event.preventDefault()
@@ -300,7 +331,8 @@ export function MiddleSidebar({
                   )}
                   <div className="tm-assistant-actions">
                     {!isGroupProxyAssistant(assistant) &&
-                    !isAutomationAssistantName(assistant.name) ? (
+                    !isAutomationAssistantName(assistant.name) &&
+                    !isAssistantLibAssistantName(assistant.name) ? (
                       <button
                         type="button"
                         className="tm-assistant-action-btn"

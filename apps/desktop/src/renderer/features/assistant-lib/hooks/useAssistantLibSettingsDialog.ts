@@ -7,6 +7,7 @@ import {
   listSelectableAssistantLibPresets,
   parseAssistantLibSessionMeta,
   parseCourseSyllabus,
+  type Assistant,
   type AssistantLibPresetId,
   type KnowledgeBase,
   type Provider,
@@ -40,10 +41,12 @@ export type UseAssistantLibSettingsDialogProps = {
   knowledgeBases: KnowledgeBase[]
   defaultLocalFolderPath: string | null
   onClose: () => void
-  onSaved?: () => void | Promise<void>
+  onSaved?: (session?: Session) => void | Promise<void>
   onKnowledgeBasesChanged?: () => void | Promise<void>
   onStatusMessage?: (message: string) => void
   onDeleteSession?: (sessionId: string) => void | Promise<void>
+  /** Shared「课堂」agent — course model UI reads/writes this agent's modelId. */
+  classroomAssistant?: Assistant | null
   defaultModelId?: string | null
   providers?: Provider[]
 }
@@ -59,6 +62,7 @@ export function useAssistantLibSettingsDialog({
   onKnowledgeBasesChanged,
   onStatusMessage,
   onDeleteSession,
+  classroomAssistant = null,
   defaultModelId,
   providers = [],
 }: UseAssistantLibSettingsDialogProps) {
@@ -94,11 +98,17 @@ export function useAssistantLibSettingsDialog({
       return
     }
     lessonPlanEditedRef.current = false
-    setDraft(draftFromSession(targetSession, knowledgeBases, defaultLocalFolderPath))
+    const next = draftFromSession(targetSession, knowledgeBases, defaultLocalFolderPath)
+    // Always show the shared classroom agent's model (same as 智能体设置).
+    next.modelId =
+      classroomAssistant?.modelId?.trim() || defaultModelId?.trim() || next.modelId.trim()
+    setDraft(next)
     setActiveTab('basic')
     setEditingDoc(false)
     setError(null)
-  }, [targetSessionId])
+    // Only re-seed when switching courses; keep in-progress edits otherwise.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- targetSessionId gates the reset
+  }, [targetSessionId, classroomAssistant?.id, classroomAssistant?.modelId, defaultModelId])
 
   useEffect(() => {
     setDraft((prev) => {
@@ -132,15 +142,27 @@ export function useAssistantLibSettingsDialog({
   const modelOptions = useMemo(() => {
     const options = buildModelOptions(providers)
     const selected = draft?.modelId?.trim()
-    if (selected && !options.some((item) => item.modelId === selected)) {
-      return [
-        ...options,
-        { modelId: selected, label: formatModelDisplayLabel(selected, providers) || selected },
-      ]
-    }
-    return options
+    if (!selected || options.some((item) => item.modelId === selected)) return options
+    const label = formatModelDisplayLabel(selected, providers).trim() || selected
+    // Never inject an option that would render as a blank row.
+    if (!label) return options
+    return [...options, { modelId: selected, label }]
   }, [draft?.modelId, providers])
-  const syllabusModelId = draft?.modelId?.trim() || defaultModelId || null
+
+  useEffect(() => {
+    if (!draft) return
+    if (draft.modelId.trim()) return
+    const fallback = defaultModelId?.trim() || modelOptions[0]?.modelId || ''
+    if (!fallback) return
+    setDraft((prev) => (prev && !prev.modelId.trim() ? { ...prev, modelId: fallback } : prev))
+  }, [draft, defaultModelId, modelOptions])
+
+  const syllabusModelId =
+    draft?.modelId?.trim() ||
+    classroomAssistant?.modelId?.trim() ||
+    defaultModelId ||
+    modelOptions[0]?.modelId ||
+    null
 
   const handleGenerateSyllabus = () => {
     if (!targetSession) return
@@ -265,6 +287,16 @@ export function useAssistantLibSettingsDialog({
         await onKnowledgeBasesChanged?.()
       }
 
+      const nextModelId = draft.modelId.trim()
+      if (classroomAssistant && nextModelId && classroomAssistant.modelId !== nextModelId) {
+        const modelResult = await window.api.invoke(IpcChannel.AssistantUpdate, {
+          id: classroomAssistant.id,
+          modelId: nextModelId,
+        })
+        if (!modelResult.ok) {
+          throw new Error(modelResult.error.message || t('assistantLibPage.settingsSaveFailed'))
+        }
+      }
       const result = await window.api.invoke(IpcChannel.SessionUpdate, {
         id: targetSession.id,
         title: courseName,
@@ -279,7 +311,7 @@ export function useAssistantLibSettingsDialog({
         throw new Error(result.error.message || t('assistantLibPage.settingsSaveFailed'))
       }
       lessonPlanEditedRef.current = false
-      await onSaved?.()
+      await onSaved?.(result.data as Session)
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -309,7 +341,7 @@ export function useAssistantLibSettingsDialog({
         throw new Error(result.error.message || t('assistantLibPage.settingsSaveFailed'))
       }
       lessonPlanEditedRef.current = false
-      await onSaved?.()
+      await onSaved?.(result.data as Session)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     }

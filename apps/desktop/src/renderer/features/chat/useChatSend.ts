@@ -1,19 +1,15 @@
 import { useCallback, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import {
   IpcChannel,
-  resolveAssistantLibSessionModelId,
   resolveAssistantLibTeachingRuntime,
   type Assistant,
   type ContentBlock,
   type Message,
   type Provider,
 } from '@toolman/shared'
-import { isModelIdAvailable } from './model-utils'
+import { resolveEffectiveChatModelIds } from './model-utils'
 import { getBlocksText } from './message-utils'
-import {
-  isGroupProxySession,
-  resolveGroupProxyAssistantModelId,
-} from '../group/group-agent-utils'
+import { isGroupProxySession } from '../group/group-agent-utils'
 import { resolveAssistantKbEnabled, type AppSettings } from '../settings/app-settings'
 import type { useSessionManager } from './useSessionManager'
 import {
@@ -129,23 +125,17 @@ export function useChatSend(
     [session.activeSession],
   )
 
-  const effectiveModelIds = useMemo(() => {
-    if (groupProxyMode && activeAssistant) {
-      const modelId = resolveGroupProxyAssistantModelId(activeAssistant, session.activeSession)
-      return modelId ? [modelId] : selectedModelIds
-    }
-    const courseModelId = resolveAssistantLibSessionModelId(session.activeSession?.metadata)
-    if (courseModelId) return [courseModelId]
-    const assistantModelId = activeAssistant?.modelId?.trim()
-    if (
-      assistantModelId &&
-      isModelIdAvailable(assistantModelId, providers) &&
-      selectedModelIds.length <= 1
-    ) {
-      return [assistantModelId]
-    }
-    return selectedModelIds
-  }, [activeAssistant, groupProxyMode, providers, selectedModelIds, session.activeSession])
+  const effectiveModelIds = useMemo(
+    () =>
+      resolveEffectiveChatModelIds({
+        activeSession: session.activeSession,
+        activeAssistant,
+        providers,
+        selectedModelIds,
+        groupProxyMode,
+      }),
+    [activeAssistant, groupProxyMode, providers, selectedModelIds, session.activeSession],
+  )
 
   const buildSendOptionsForSession = useCallback(
     (contentBlocks?: ContentBlock[]) =>

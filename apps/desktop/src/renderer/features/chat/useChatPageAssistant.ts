@@ -1,40 +1,62 @@
-import { useCallback, useEffect, useMemo, type CSSProperties } from 'react'
-import { isLegacyPerCourseTeachingAssistant, type Assistant } from '@toolman/shared'
+import { useCallback, useEffect, useMemo, useRef, type CSSProperties } from 'react'
+import {
+  isAssistantLibAssistantName,
+  isLegacyPerCourseTeachingAssistant,
+  resolveCanonicalAssistantLibAssistant,
+  type Assistant,
+} from '@toolman/shared'
 import { messageFontSizePx } from './message-settings'
 import {
   isGroupProxyReadOnlySession,
   isGroupProxySession,
   isGroupSharedMirrorAssistant,
-  resolveGroupProxyAssistantModelId,
 } from '../group/group-agent-utils'
 import type { MessageSettings } from './message-settings'
+import type { AppSettings } from '../settings/app-settings'
 import type { useChat } from './useChat'
 import { updateAssistantModel } from './chat-page-handlers'
-import { isModelIdAvailable } from './model-utils'
+import {
+  isModelIdAvailable,
+  isUnconfiguredModelId,
+  pickDefaultModelId,
+  resolveHeaderChatModelIds,
+} from './model-utils'
 
 type ChatApi = ReturnType<typeof useChat>
 
 export function useChatPageAssistant(
   chat: ChatApi,
   messageSettings: MessageSettings,
+  appSettings?: AppSettings,
 ) {
+  const canonicalClassroom = useMemo(
+    () => resolveCanonicalAssistantLibAssistant(chat.assistants, chat.sessions),
+    [chat.assistants, chat.sessions],
+  )
+
   const activeAssistant = useMemo(() => {
     const assistantId = chat.activeSession?.assistantId
     if (assistantId) {
-      return chat.assistants.find((a) => a.id === assistantId) ?? null
+      const matched = chat.assistants.find((a) => a.id === assistantId) ?? null
+      // Course topics under duplicate「课堂」agents still resolve to the canonical one
+      // so the breadcrumb / settings model stay consistent with the classroom module.
+      if (matched && isAssistantLibAssistantName(matched.name) && canonicalClassroom) {
+        return canonicalClassroom
+      }
+      return matched
     }
     return chat.assistants.find((a) => a.isPinned) ?? chat.assistants[0] ?? null
-  }, [chat.activeSession, chat.assistants])
+  }, [canonicalClassroom, chat.activeSession, chat.assistants])
 
-  const sidebarAssistants = useMemo(
-    () =>
-      chat.assistants.filter(
-        (assistant) =>
-          !isGroupSharedMirrorAssistant(assistant) &&
-          !isLegacyPerCourseTeachingAssistant(assistant),
-      ),
-    [chat.assistants],
-  )
+  const sidebarAssistants = useMemo(() => {
+    const classroomId = canonicalClassroom?.id
+    return chat.assistants.filter((assistant) => {
+      if (isGroupSharedMirrorAssistant(assistant)) return false
+      if (isLegacyPerCourseTeachingAssistant(assistant)) return false
+      if (!isAssistantLibAssistantName(assistant.name)) return true
+      return Boolean(classroomId && assistant.id === classroomId)
+    })
+  }, [canonicalClassroom?.id, chat.assistants])
 
   const groupProxyMode = useMemo(
     () => isGroupProxySession(chat.activeSession),
@@ -46,29 +68,19 @@ export function useChatPageAssistant(
     [chat.activeSession],
   )
 
-  const activeAssistantModelId = useMemo(() => {
-    if (!activeAssistant) return null
-    const resolved = resolveGroupProxyAssistantModelId(activeAssistant, chat.activeSession)
-    if (!resolved) return null
-    if (groupProxyMode) return resolved
-    return isModelIdAvailable(resolved, chat.providers) ? resolved : null
-  }, [activeAssistant, chat.activeSession, chat.providers, groupProxyMode])
+  // Breadcrumb follows each agent's settings model when switching agents.
+  const headerModelIds = useMemo(
+    () =>
+      resolveHeaderChatModelIds({
+        activeSession: chat.activeSession,
+        activeAssistant,
+        selectedModelIds: chat.selectedModelIds,
+        groupProxyMode,
+      }),
+    [activeAssistant, chat.activeSession, chat.selectedModelIds, groupProxyMode],
+  )
 
-  const headerModelIds = useMemo(() => {
-    if (groupProxyMode && activeAssistantModelId) {
-      return [activeAssistantModelId]
-    }
-    if (activeAssistantModelId && chat.selectedModelIds.length <= 1) {
-      return [activeAssistantModelId]
-    }
-    return chat.selectedModelIds
-  }, [activeAssistantModelId, chat.selectedModelIds, groupProxyMode])
-
-  const defaultModelId = groupProxyMode
-    ? activeAssistantModelId
-    : (activeAssistantModelId && chat.selectedModelIds.length <= 1
-        ? activeAssistantModelId
-        : (chat.selectedModelIds[0] ?? activeAssistantModelId ?? null))
+  const defaultModelId = headerModelIds[0] ?? null
 
   const translationLanguages = activeAssistant?.parameters.translationLanguages
 
@@ -85,9 +97,9 @@ export function useChatPageAssistant(
       if (groupProxyMode) return
       chat.setSelectedModelIds(modelIds)
       const primaryModelId = modelIds[0]
-      if (!activeAssistant || !primaryModelId || activeAssistant.modelId === primaryModelId) {
-        return
-      }
+      if (!primaryModelId || !activeAssistant) return
+      // Agent-page path edits the agent settings model. Course overrides stay in 课程设置.
+      if (activeAssistant.modelId === primaryModelId) return
       void (async () => {
         const result = await updateAssistantModel(activeAssistant, primaryModelId)
         if (!result.ok) {
@@ -100,13 +112,57 @@ export function useChatPageAssistant(
     [activeAssistant, chat, groupProxyMode],
   )
 
+  // Seed placeholder `…:unconfigured` is not a real model — heal it once providers
+  // are ready so the breadcrumb stops inheriting other agents' selections.
+  const healingUnconfiguredRef = useRef<string | null>(null)
   useEffect(() => {
-    if (!activeAssistantModelId) return
+    const assistant = activeAssistant
+    const modelId = assistant?.modelId?.trim()
+    if (!assistant || !modelId) return
+
+    if (isUnconfiguredModelId(modelId)) {
+      const fallback = pickDefaultModelId(
+        chat.assistants,
+        chat.providers,
+        undefined,
+        appSettings?.defaultChatModelId,
+      )
+      if (!fallback) {
+        chat.setSelectedModelIds((prev) => (prev.length === 0 ? prev : []))
+        return
+      }
+      chat.setSelectedModelIds((prev) =>
+        prev.length === 1 && prev[0] === fallback ? prev : [fallback],
+      )
+      if (healingUnconfiguredRef.current === assistant.id) return
+      healingUnconfiguredRef.current = assistant.id
+      void (async () => {
+        const result = await updateAssistantModel(assistant, fallback)
+        if (!result.ok) {
+          healingUnconfiguredRef.current = null
+          chat.setError(result.error)
+          return
+        }
+        await chat.loadAssistants()
+      })()
+      return
+    }
+
+    healingUnconfiguredRef.current = null
+    // Always snap to the current agent's settings model — never keep the previous agent.
     chat.setSelectedModelIds((prev) => {
-      if (prev.length === 1 && prev[0] === activeAssistantModelId) return prev
-      return [activeAssistantModelId]
+      if (prev.length === 1 && prev[0] === modelId) return prev
+      return [modelId]
     })
-  }, [activeAssistant?.id, activeAssistantModelId, chat.setSelectedModelIds])
+  }, [
+    activeAssistant,
+    appSettings?.defaultChatModelId,
+    chat.assistants,
+    chat.loadAssistants,
+    chat.providers,
+    chat.setError,
+    chat.setSelectedModelIds,
+  ])
 
   const handleAssistantCreated = useCallback(
     async (assistant: Assistant) => {

@@ -69,10 +69,21 @@ export function snapshotToPageBody(
   documentId?: string | null,
 ): DocumentPageBody | null {
   if (!snapshot || snapshot.status === 'empty') return null
-  return toDocumentPageBody(snapshot.translatedText, snapshot.parsedMarkdown, {
+  const body = toDocumentPageBody(snapshot.translatedText, snapshot.parsedMarkdown, {
     documentId,
     pageNumber: snapshot.pageNumber,
   })
+  // Done snapshots keep Chinese in translatedText; HTML parse markdown would
+  // otherwise strip plain to '' and leave reopen blank until 翻译 is clicked.
+  if (
+    body &&
+    snapshot.status === 'done' &&
+    snapshot.translatedText.trim() &&
+    !body.plain.trim()
+  ) {
+    return { ...body, plain: snapshot.translatedText.trim() }
+  }
+  return body
 }
 
 export function pageStateToPageBody(
@@ -145,10 +156,8 @@ export function resolvePageForDisplay(
     if (hasLiveBody) {
       return page
     }
-    // Translating/restored shells may still need the parse body as a preview.
-    if (page.status === 'done') {
-      return page
-    }
+    // Restored lightweight / translating shells: attach snapshot body so reopen
+    // is not blank. Prefer markdown when plain was stripped for HTML tables.
     return {
       ...page,
       translatedText: body.plain || body.markdown,

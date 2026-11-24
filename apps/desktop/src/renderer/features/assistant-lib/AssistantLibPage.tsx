@@ -19,6 +19,7 @@ export function AssistantLibPage(props: AssistantLibPageProps) {
     knowledgeBases,
     submittingCourse,
     learningSessions,
+    sharedAssistant,
     busy,
     error,
     activeLearningSession,
@@ -121,11 +122,18 @@ export function AssistantLibPage(props: AssistantLibPageProps) {
           knowledgeBases={knowledgeBases}
           defaultLocalFolderPath={props.knowledgeFolder.path}
           onClose={closeAssistantLibSettings}
-          onSaved={props.handleReloadAssistants}
+          onSaved={async (session) => {
+            // Apply course TTS immediately so ChatComposer does not keep using
+            // stale metadata (and incorrectly fall back to agent autoSpeak).
+            if (session) props.chat.upsertSession(session)
+            await props.handleReloadAssistants()
+            await props.chat.loadSessions()
+          }}
           onKnowledgeBasesChanged={reloadKnowledgeBases}
           onStatusMessage={props.setStatusMessage}
           onDeleteSession={handleDeleteLearningSession}
-          defaultModelId={props.defaultModelId}
+          classroomAssistant={sharedAssistant}
+          defaultModelId={sharedAssistant?.modelId ?? props.defaultModelId}
           providers={props.chat.providers}
         />
       ) : null}

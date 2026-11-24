@@ -9,7 +9,7 @@ export function computeGroupPickerSelectionCount(options: {
   selectedGroupIds: Set<string>
   selectedKeys: Set<string>
 }): number {
-  const selectableGroups = options.groups.filter((group) => !group.disabled)
+  const selectableGroups = options.groups.filter((group) => !group.disabled && !group.sectionHeader)
   let count = options.selectedKeys.size
 
   for (const groupId of options.selectedGroupIds) {

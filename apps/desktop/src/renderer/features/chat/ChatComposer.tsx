@@ -1,5 +1,5 @@
 import {
-  resolveAssistantLibSessionTts,
+  resolveEffectiveChatTts,
   type ContentBlock,
   type TranslationLanguage,
 } from '@toolman/shared'
@@ -90,20 +90,27 @@ export function ChatComposer({
     return chat.assistants.find((item) => item.id === assistantId) ?? null
   }, [chat.activeSession?.assistantId, chat.assistants])
 
-  const classroomTts = useMemo(
-    () => resolveAssistantLibSessionTts(chat.activeSession?.metadata),
-    [chat.activeSession?.metadata],
+  // Course topic TTS wins over the shared 课堂 agent parameters.
+  const chatTts = useMemo(
+    () =>
+      resolveEffectiveChatTts({
+        sessionMetadata: chat.activeSession?.metadata,
+        assistantAutoSpeak: activeAssistant?.parameters.autoSpeak,
+        assistantTtsEngine: activeAssistant?.parameters.ttsEngine,
+        assistantTtsVoice: activeAssistant?.parameters.ttsVoice,
+      }),
+    [
+      activeAssistant?.parameters.autoSpeak,
+      activeAssistant?.parameters.ttsEngine,
+      activeAssistant?.parameters.ttsVoice,
+      chat.activeSession?.metadata,
+    ],
   )
-  const autoSpeak = classroomTts
-    ? classroomTts.autoSpeak
-    : Boolean(activeAssistant?.parameters.autoSpeak)
-  const ttsEngine = classroomTts?.ttsEngine ?? activeAssistant?.parameters.ttsEngine
-  const ttsVoice = classroomTts?.ttsVoice ?? activeAssistant?.parameters.ttsVoice
   const { playingMessageId, playbackState, speakMessage, pause, resume, stop } =
     useAssistantTts({
-      autoSpeak,
-      ttsEngine,
-      ttsVoice,
+      autoSpeak: chatTts.autoSpeak,
+      ttsEngine: chatTts.ttsEngine,
+      ttsVoice: chatTts.ttsVoice,
       sessionId: chat.activeSessionId,
       messages: chat.messages,
       onError: chat.setError,

@@ -195,7 +195,8 @@ export function AssistantLibChatPanel(props: Props) {
         onEditUserMessage={props.handleEditUserMessage}
         onPrefillConsumed={props.handlePrefillConsumed}
         onUpdateAppSettings={updateAppSettings}
-        onCreateSession={() => void chat.createSession(classroomAssistantId ?? undefined)}
+        // Keep study chat on the current course topic — do not spawn blank 课堂 sessions.
+        onCreateSession={undefined}
         onClearSession={() => void chat.clearSessionMessages()}
         onSaveToNote={(messageId) => {
           const message = chat.messages.find((item) => item.id === messageId)

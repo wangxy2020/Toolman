@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import type { Assistant, Session } from '@toolman/shared'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { IconChevronRight, IconPlus, IconTopic } from '../../components/icons'
@@ -11,6 +11,7 @@ import {
 import { resolveAutomationAssistant } from './resolve-automation-assistant'
 import { useWorkflows } from './useWorkflows'
 import type { LocalWorkflowItem } from './workflow-types'
+import { WorkflowSidebarContextMenu } from './WorkflowSidebarContextMenu'
 
 function normalizeName(next: string, fallback: string): string {
   const trimmed = next.trim()
@@ -59,8 +60,19 @@ export function WorkflowSidebar({
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [renameId, setRenameId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<LocalWorkflowItem | null>(null)
+  const [contextMenu, setContextMenu] = useState<{
+    x: number
+    y: number
+    item: LocalWorkflowItem
+  } | null>(null)
   const [creating, setCreating] = useState(false)
   const prunedOrphansRef = useRef('')
+
+  const openContextMenu = (event: MouseEvent, item: LocalWorkflowItem) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setContextMenu({ x: event.clientX, y: event.clientY, item })
+  }
 
   const chatLike = useMemo(
     () => ({
@@ -224,10 +236,7 @@ export function WorkflowSidebar({
           event.preventDefault()
           setRenameId(item.id)
         }}
-        onContextMenu={(event) => {
-          event.preventDefault()
-          setDeleteTarget(item)
-        }}
+        onContextMenu={(event) => openContextMenu(event, item)}
         title={item.name}
       >
         <span className="tm-session-item-icon" aria-hidden="true">
@@ -309,10 +318,7 @@ export function WorkflowSidebar({
                           event.preventDefault()
                           setRenameId(task.id)
                         }}
-                        onContextMenu={(event) => {
-                          event.preventDefault()
-                          setDeleteTarget(task)
-                        }}
+                        onContextMenu={(event) => openContextMenu(event, task)}
                       >
                         {task.name}
                       </button>
@@ -341,6 +347,21 @@ export function WorkflowSidebar({
           )}
         </div>
       </div>
+
+      {contextMenu ? (
+        <WorkflowSidebarContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          deleteLabel={
+            contextMenu.item.parentId
+              ? t('workflowPage.deleteSubTask')
+              : t('workflowPage.deleteTask')
+          }
+          onClose={() => setContextMenu(null)}
+          onRename={() => setRenameId(contextMenu.item.id)}
+          onDelete={() => setDeleteTarget(contextMenu.item)}
+        />
+      ) : null}
 
       {deleteTarget ? (
         <ConfirmDialog
