@@ -56,11 +56,18 @@ import { joinP2pWorkspace } from './p2p-member-join/join-workspace'
 - 未请求不写测试；写了就要有意义。
 - Main 改动后 dev 需**完全退出 Electron 再启**（main 不 HMR）。
 
+## ESLint disable 注释
+
+- **禁止**对未启用的规则写 `eslint-disable` / `eslint-disable-next-line`（CI 会报 `Definition for rule … was not found`）。
+- React Hooks 相关禁用仅允许：`react-hooks/exhaustive-deps`、`react-hooks/rules-of-hooks`（已在根目录 `eslint.config.mjs` 通过 `eslint-plugin-react-hooks` 启用）。
+- 新增 `eslint-disable` 前先确认规则名出现在 `eslint.config.mjs` 或已安装插件的 recommended 集合中。
+
 ## 交付前验证
 
 ```bash
 pnpm --filter @toolman/desktop typecheck
 pnpm --filter @toolman/desktop test
+pnpm lint:eslint
 ```
 
 触及 core 流程时再跑：`bash scripts/smoke-critical-paths.sh`

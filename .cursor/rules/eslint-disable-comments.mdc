@@ -1,0 +1,12 @@
+---
+description: Never disable ESLint rules that are not installed/configured
+globs: "**/*.{ts,tsx,js,mjs,cjs}"
+alwaysApply: false
+---
+
+# ESLint disable comments
+
+- Do **not** add `eslint-disable` / `eslint-disable-next-line` for rules that are not defined in the root `eslint.config.mjs`.
+- Unknown disables fail CI with `Definition for rule '…' was not found`.
+- `react-hooks/exhaustive-deps` and `react-hooks/rules-of-hooks` are enabled via `eslint-plugin-react-hooks`. Prefer fixing deps; only disable with a short reason when intentional.
+- Before adding any other disable, verify the rule exists in `eslint.config.mjs` (or an imported plugin config).
