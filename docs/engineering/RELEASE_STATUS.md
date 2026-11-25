@@ -1,6 +1,6 @@
 # Toolman 发布状态总览
 
-> **版本**：`0.7.0-rc.7.6` · **通道**：`staging` · **更新**：2026-11-21  
+> **版本**：`0.7.0-rc.7.8` · **通道**：`staging` · **更新**：2026-11-25  
 > **保留文档**：[RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md) · [PRODUCTION_CONFIG.md](./PRODUCTION_CONFIG.md) · [RC1_DOGFOOD.md](./RC1_DOGFOOD.md)
 
 本文档合并原 Phase/Plan/Status/Kickoff/WAN 签字/缺陷跟踪等工程文档，避免多份重复维护。
