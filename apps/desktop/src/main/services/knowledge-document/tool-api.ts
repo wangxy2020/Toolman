@@ -14,6 +14,8 @@ import {
 import {
   DEFAULT_KNOWLEDGE_CHAT_TOP_K,
   expandKnowledgeHitsWithFullDocuments,
+  resolveKnowledgeExpandOptions,
+  type KnowledgeExpandProfile,
 } from './expand-full-documents'
 import { searchKnowledge } from './search'
 
@@ -107,18 +109,21 @@ export async function searchKnowledgeForChat(options: {
   topK?: number
   scoreThreshold?: number
   kbSettings?: Record<string, { topK?: number; scoreThreshold?: number }>
+  /** full = cloud-friendly; compact = Ollama/Metal-safe; chunks = no full-doc expand */
+  expandProfile?: KnowledgeExpandProfile
 }): Promise<KnowledgeSearchResult[]> {
   if (options.kbIds.length === 0) return []
+  const expand = resolveKnowledgeExpandOptions(options.expandProfile ?? 'full')
   const hits = await searchKnowledge({
     workspaceId: options.workspaceId,
     kbIds: options.kbIds,
     query: options.query,
-    topK: options.topK ?? DEFAULT_KNOWLEDGE_CHAT_TOP_K,
+    topK: options.topK ?? expand.topK ?? DEFAULT_KNOWLEDGE_CHAT_TOP_K,
     scoreThreshold: options.scoreThreshold,
     kbSettings: options.kbSettings,
   })
-  // Prefer whole indexed documents over a thin top-K slice of chunks.
-  return expandKnowledgeHitsWithFullDocuments(hits, options.query)
+  // Prefer whole indexed documents over a thin top-K slice of chunks (unless compact/chunks).
+  return expandKnowledgeHitsWithFullDocuments(hits, options.query, expand)
 }
 
 export function resolveEffectiveKbIds(options: {

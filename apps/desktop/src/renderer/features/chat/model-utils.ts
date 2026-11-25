@@ -36,15 +36,16 @@ function isSelectableChatModel(model: Provider['models'][number]): boolean {
 /** Network providers first, then local Ollama — only models actually listed on the provider. */
 export function listAvailableChatModelIds(
   providers: Provider[],
-  options?: { networkOnly?: boolean },
+  options?: { networkOnly?: boolean; preferLocal?: boolean },
 ): string[] {
   const enabled = providers.filter((provider) => provider.isEnabled !== false)
+  const network = enabled.filter((provider) => isNetworkProvider(provider))
+  const local = enabled.filter((provider) => !isNetworkProvider(provider))
   const ordered = options?.networkOnly
-    ? enabled.filter((provider) => isNetworkProvider(provider))
-    : [
-        ...enabled.filter((provider) => isNetworkProvider(provider)),
-        ...enabled.filter((provider) => !isNetworkProvider(provider)),
-      ]
+    ? network
+    : options?.preferLocal
+      ? [...local, ...network]
+      : [...network, ...local]
 
   const out: string[] = []
   for (const provider of ordered) {
@@ -73,13 +74,15 @@ export function resolvePrimaryAssistant(assistants: Assistant[]): Assistant | un
 
 /**
  * Resolve a chat model without inventing tags like gemma4:latest.
- * Prefer settings → available assistant model → network models → local models.
+ * Prefer settings → available assistant model → network models → local models
+ * (or local first when `preferLocal` — used when healing seed `unconfigured`).
  */
 export function pickDefaultModelId(
   assistants: Assistant[],
   providers: Provider[],
   preferredModel?: string,
   preferredModelId?: string | null,
+  options?: { preferLocal?: boolean },
 ): string | null {
   const fromSettings = preferredModelId?.trim()
   if (fromSettings && isModelIdAvailable(fromSettings, providers)) {
@@ -101,7 +104,9 @@ export function pickDefaultModelId(
     }
   }
 
-  return listAvailableChatModelIds(providers)[0] ?? null
+  return (
+    listAvailableChatModelIds(providers, { preferLocal: options?.preferLocal })[0] ?? null
+  )
 }
 
 export function pickDefaultModelIds(

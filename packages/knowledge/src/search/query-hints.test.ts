@@ -18,6 +18,19 @@ describe('query-hints', () => {
     ).toBe('part1－W04Lot7Mwanza Contract')
   })
 
+  it('extracts titles from analyze-main-content style queries', () => {
+    expect(extractDocumentTitleQueryHint('搜索知识库中的小说写作教程，分析主要内容')).toBe(
+      '小说写作教程',
+    )
+    expect(extractDocumentTitleQueryHint('搜索知识库中的小说写作教程文件，总结一下')).toBe(
+      '小说写作教程',
+    )
+    expect(extractDocumentTitleQueryHint('帮我分析一下知识库里合同文件的主要内容')).toBe('合同')
+    expect(extractDocumentTitleQueryHint('知识库里小说写作教程.pdf的主要内容是什么')).toBe(
+      '小说写作教程.pdf',
+    )
+  })
+
   it('extracts book title and chapter from 第五章 queries without treating them as page 5', () => {
     const query = '小说写作教程中，第五章的标题，并总结一下这一章的内容。'
     expect(extractDocumentTitleQueryHint(query)).toBe('小说写作教程')

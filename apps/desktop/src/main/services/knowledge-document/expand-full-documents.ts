@@ -11,6 +11,37 @@ export const FULL_DOCUMENT_EXPAND_MAX_DOCS = 2
 /** Byte budget for expanded full-document text (UTF-8). */
 export const FULL_DOCUMENT_EXPAND_MAX_BYTES = 384 * 1024
 
+/**
+ * Local Ollama (esp. large MoE on Apple Metal) OOMs when chat injects ~384KB
+ * of KB text. Use a compact profile for those providers.
+ */
+export const OLLAMA_KNOWLEDGE_CHAT_TOP_K = 6
+export const OLLAMA_FULL_DOCUMENT_EXPAND_MAX_DOCS = 1
+export const OLLAMA_FULL_DOCUMENT_EXPAND_MAX_BYTES = 48 * 1024
+
+export type KnowledgeExpandProfile = 'full' | 'compact' | 'chunks'
+
+export function resolveKnowledgeExpandOptions(profile: KnowledgeExpandProfile = 'full'): {
+  skip?: boolean
+  maxDocuments?: number
+  maxBytes?: number
+  topK?: number
+} {
+  if (profile === 'chunks') return { skip: true, topK: OLLAMA_KNOWLEDGE_CHAT_TOP_K }
+  if (profile === 'compact') {
+    return {
+      maxDocuments: OLLAMA_FULL_DOCUMENT_EXPAND_MAX_DOCS,
+      maxBytes: OLLAMA_FULL_DOCUMENT_EXPAND_MAX_BYTES,
+      topK: OLLAMA_KNOWLEDGE_CHAT_TOP_K,
+    }
+  }
+  return {
+    maxDocuments: FULL_DOCUMENT_EXPAND_MAX_DOCS,
+    maxBytes: FULL_DOCUMENT_EXPAND_MAX_BYTES,
+    topK: DEFAULT_KNOWLEDGE_CHAT_TOP_K,
+  }
+}
+
 function truncateUtf8(text: string, maxBytes: number): { text: string; truncated: boolean } {
   const trimmed = text.trim()
   const bytes = Buffer.byteLength(trimmed, 'utf8')
@@ -65,9 +96,11 @@ export function expandKnowledgeHitsWithFullDocuments(
   options?: {
     maxDocuments?: number
     maxBytes?: number
+    skip?: boolean
   },
 ): KnowledgeSearchResult[] {
   if (hits.length === 0) return hits
+  if (options?.skip) return hits
   if (extractPdfPageQueryHint(query) != null) return hits
 
   const maxDocuments = Math.max(1, options?.maxDocuments ?? FULL_DOCUMENT_EXPAND_MAX_DOCS)

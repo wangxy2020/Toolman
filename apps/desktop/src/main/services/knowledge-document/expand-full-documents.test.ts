@@ -52,4 +52,25 @@ describe('expandKnowledgeHitsWithFullDocuments', () => {
     expect(results).toEqual(input)
     expect(listChunkTextsByDocument).not.toHaveBeenCalled()
   })
+
+  it('honors skip option for compact local-model profiles', () => {
+    listChunkTextsByDocument.mockReturnValue(['full text'])
+    const docId = '22222222-2222-2222-2222-222222222222'
+    const input = [hit({ documentId: docId, text: 'snippet', score: 0.99 })]
+    const results = expandKnowledgeHitsWithFullDocuments(input, '总结这份文档', { skip: true })
+    expect(results).toEqual(input)
+    expect(listChunkTextsByDocument).not.toHaveBeenCalled()
+  })
+
+  it('caps expanded bytes for compact profile', () => {
+    listChunkTextsByDocument.mockReturnValue(['A'.repeat(20_000), 'B'.repeat(20_000)])
+    const docId = '22222222-2222-2222-2222-222222222222'
+    const results = expandKnowledgeHitsWithFullDocuments(
+      [hit({ documentId: docId, text: 'snippet', score: 0.99 })],
+      '总结这份文档',
+      { maxDocuments: 1, maxBytes: 8 * 1024 },
+    )
+    expect(Buffer.byteLength(results[0]?.text ?? '', 'utf8')).toBeLessThanOrEqual(8 * 1024 + 64)
+    expect(results[0]?.text).toContain('全文已截断')
+  })
 })

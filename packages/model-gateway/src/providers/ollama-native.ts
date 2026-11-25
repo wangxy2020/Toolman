@@ -111,6 +111,32 @@ export function resolveOllamaNativeThink(params: ChatParams): boolean {
   return isOllamaNativeThinkingModelId(params.model.trim())
 }
 
+/**
+ * Cap Ollama context window. Models like qwen3.6 advertise 256k context; leaving
+ * num_ctx unset lets MLX Metal allocate a huge KV cache and OOM on Apple Silicon.
+ */
+export function resolveOllamaNativeNumCtx(params: {
+  model: string
+  maxTokens?: number
+  extraBody?: Record<string, unknown>
+}): number {
+  const fromExtra = params.extraBody?.num_ctx
+  if (typeof fromExtra === 'number' && Number.isFinite(fromExtra) && fromExtra > 0) {
+    return Math.floor(fromExtra)
+  }
+  const options = params.extraBody?.options
+  if (options && typeof options === 'object' && !Array.isArray(options)) {
+    const nested = (options as Record<string, unknown>).num_ctx
+    if (typeof nested === 'number' && Number.isFinite(nested) && nested > 0) {
+      return Math.floor(nested)
+    }
+  }
+  if (isOcrVisionModelId(params.model)) return 10240
+  const predict = params.maxTokens && params.maxTokens > 0 ? params.maxTokens : 8192
+  // Prompt + KB injection + output; stay well below 256k defaults.
+  return Math.min(32768, Math.max(16384, predict + 8192))
+}
+
 export async function* streamOllamaNativeChat(
   config: ProviderConfig,
   params: ChatParams,
@@ -119,6 +145,11 @@ export async function* streamOllamaNativeChat(
   const numPredict = resolveOpenAiMaxTokens(config, params.model, params.maxTokens) ?? 4096
   const isOcr = isOcrVisionModelId(params.model)
   const think = resolveOllamaNativeThink(params)
+  const numCtx = resolveOllamaNativeNumCtx({
+    model: params.model,
+    maxTokens: numPredict,
+    extraBody: params.extraBody,
+  })
 
   const response = await providerFetch(config, `${baseUrl}/api/chat`, {
     method: 'POST',
@@ -131,8 +162,7 @@ export async function* streamOllamaNativeChat(
       options: {
         temperature: params.temperature ?? (isOcr ? 0 : 0.7),
         num_predict: numPredict,
-        // glm-ocr needs a larger context for vision tokens.
-        ...(isOcr ? { num_ctx: 10240 } : {}),
+        num_ctx: numCtx,
         ...(!isOcr ? { repeat_penalty: 1.12 } : {}),
       },
     }),

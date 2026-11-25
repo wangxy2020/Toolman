@@ -160,6 +160,11 @@ export function ensureWorkspaceDefaults(database: ToolmanDatabase) {
         delete params.p2pGroupProxy
         parametersJson = JSON.stringify(params)
       }
+      // Bump seed default output cap; leave custom values alone.
+      if (params.maxTokens === 4096) {
+        params.maxTokens = 8192
+        parametersJson = JSON.stringify(params)
+      }
     } catch {
       // keep existing parametersJson
     }
@@ -180,6 +185,31 @@ export function ensureWorkspaceDefaults(database: ToolmanDatabase) {
         })
         .where(eq(assistants.id, DEFAULT_ASSISTANT_ID))
         .run()
+    }
+  }
+
+  // Also bump other workspace copies still on the old seed default.
+  const builtinGenerals = database
+    .select()
+    .from(assistants)
+    .where(eq(assistants.name, '通用智能体'))
+    .all()
+  for (const row of builtinGenerals) {
+    if (row.deletedAt || !row.isBuiltin) continue
+    try {
+      const params = JSON.parse(row.parametersJson) as Record<string, unknown>
+      if (params.maxTokens !== 4096) continue
+      params.maxTokens = 8192
+      database
+        .update(assistants)
+        .set({
+          parametersJson: JSON.stringify(params),
+          updatedAt: now,
+        })
+        .where(eq(assistants.id, row.id))
+        .run()
+    } catch {
+      // skip malformed parameters
     }
   }
 }

@@ -122,12 +122,14 @@ export function useChatPageAssistant(
 
     if (isUnconfiguredModelId(modelId)) {
       // Do not inherit another agent's model via resolvePrimaryAssistant —
-      // only app default + available providers.
+      // only app default + available providers. Prefer local Ollama so the
+      // seed `unconfigured` heal does not silently lock onto DeepSeek.
       const fallback = pickDefaultModelId(
         [],
         chat.providers,
         undefined,
         appSettings?.defaultChatModelId,
+        { preferLocal: true },
       )
       if (!fallback) {
         chat.setSelectedModelIds((prev) => (prev.length === 0 ? prev : []))

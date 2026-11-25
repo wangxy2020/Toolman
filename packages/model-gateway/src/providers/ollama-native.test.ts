@@ -3,9 +3,29 @@ import { describe, expect, it } from 'vitest'
 import {
   extractBase64ImagesFromContent,
   formatMessagesForOllamaNative,
+  resolveOllamaNativeNumCtx,
   resolveOllamaNativeThink,
   shouldUseOllamaNativeChat,
 } from './ollama-native.js'
+
+describe('resolveOllamaNativeNumCtx', () => {
+  it('caps chat context well below 256k model defaults', () => {
+    expect(resolveOllamaNativeNumCtx({ model: 'qwen3.6:latest', maxTokens: 8192 })).toBe(16384)
+  })
+
+  it('keeps OCR context at 10240', () => {
+    expect(resolveOllamaNativeNumCtx({ model: 'glm-ocr:latest' })).toBe(10240)
+  })
+
+  it('honors explicit extraBody.num_ctx', () => {
+    expect(
+      resolveOllamaNativeNumCtx({
+        model: 'qwen3.6:latest',
+        extraBody: { num_ctx: 8192 },
+      }),
+    ).toBe(8192)
+  })
+})
 
 describe('shouldUseOllamaNativeChat', () => {
   it('uses native chat for qwen3 without tools', () => {

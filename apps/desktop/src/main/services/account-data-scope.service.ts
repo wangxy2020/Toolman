@@ -249,7 +249,7 @@ function ensureWorkspaceForSlug(scope: AccountDataScopeFile, slug: string): stri
       description: '默认 AI 对话智能体',
       systemPrompt: '你是一个有帮助的 AI 助手。',
       modelId: `${providerId}:${DEFAULT_LOCAL_MODEL}`,
-      parametersJson: JSON.stringify({ temperature: 0.7, maxTokens: 4096 }),
+      parametersJson: JSON.stringify({ temperature: 0.7, maxTokens: 8192 }),
       isBuiltin: true,
       isPinned: true,
       createdAt: now,

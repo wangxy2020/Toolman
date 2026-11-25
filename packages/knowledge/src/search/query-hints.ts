@@ -167,6 +167,25 @@ export function documentTitleMatchesQuery(docTitle: string, queryHint: string): 
   return false
 }
 
+const KB_PREFIX_RE =
+  /^(?:请?(?:帮我)?(?:搜索|查找|检索|看看|查看|分析|总结|解读)?(?:一下|下)?(?:在|从)?(?:本地)?知识库(?:中|里|内)?的?\s*)+/u
+const ANALYSIS_TAIL_RE =
+  /[，,。\s]*(?:的)?(?:主要)?(?:内容|大意|摘要|概述)?[，,。\s]*(?:是什么|怎么样)?[，,。\s]*(?:分析|总结|概括|解读|介绍)?(?:一下|下)?[。！？?]*$/u
+
+function cleanDocumentTitleCandidate(raw: string): string | null {
+  const candidate = raw
+    .replace(KB_PREFIX_RE, '')
+    .replace(/^(?:搜索|查找|检索|在|从|本地知识库|知识库|中|里|的|\s)+/u, '')
+    .replace(ANALYSIS_TAIL_RE, '')
+    .replace(/\s*(?:文件|文档|这本书|该书)$/u, '')
+    .replace(/[《》「」"']/g, '')
+    .trim()
+  if (candidate.length < 2 || candidate.length > 80) return null
+  // Reject leftovers that are still just instruction words.
+  if (/^(?:内容|主要|分析|总结|文件|文档)$/u.test(candidate)) return null
+  return candidate
+}
+
 /** Extract a document/file name hint from natural-language queries. */
 export function extractDocumentTitleQueryHint(query: string): string | null {
   const trimmed = query.trim()
@@ -175,38 +194,61 @@ export function extractDocumentTitleQueryHint(query: string): string | null {
   const withExt = trimmed.match(
     /([^\s,，。；;：:？?！!]+?\.(?:pdf|docx?|txt|markdown|md|pptx|xlsx?|csv))/i,
   )
-  if (withExt?.[1]) return withExt[1].trim()
+  if (withExt?.[1]) {
+    const cleaned = cleanDocumentTitleCandidate(withExt[1])
+    if (cleaned) return cleaned
+  }
 
   const bookTitle = trimmed.match(/《([^》]{2,80})》/)
   if (bookTitle?.[1]) return bookTitle[1].trim()
 
   const withFileBeforePage = trimmed.match(
-    /(?:本地)?知识库\s*中\s*(.+?)\s*(?:文件|文档)\s*第\s*\d+\s*页/i,
+    /(?:本地)?知识库\s*(?:中|里|内)?\s*(?:的)?\s*(.+?)\s*(?:文件|文档)\s*第\s*\d+\s*页/i,
   )
   if (withFileBeforePage?.[1]) {
-    const candidate = withFileBeforePage[1].trim()
-    if (candidate.length >= 3) return candidate
+    const candidate = cleanDocumentTitleCandidate(withFileBeforePage[1])
+    if (candidate) return candidate
+  }
+
+  // 「知识库中的小说写作教程，分析主要内容」「…教程文件，总结一下」
+  const kbNamedDoc = trimmed.match(
+    /(?:本地)?知识库\s*(?:中|里|内)?\s*(?:的)?\s*(.+?)(?:文件|文档)?\s*[，,。]?\s*(?:分析|总结|概括|解读|介绍|讲了什么|主要内容|大意)/u,
+  )
+  if (kbNamedDoc?.[1]) {
+    const candidate = cleanDocumentTitleCandidate(kbNamedDoc[1])
+    if (candidate) return candidate
+  }
+
+  // 「分析知识库里合同文件的主要内容」
+  const analyzeKbDoc = trimmed.match(
+    /(?:分析|总结|概括|解读|介绍)\s*(?:一下|下)?\s*(?:本地)?知识库\s*(?:中|里|内)?\s*(?:的)?\s*(.+?)(?:文件|文档)?\s*(?:的)?(?:主要内容|大意|内容)?/u,
+  )
+  if (analyzeKbDoc?.[1]) {
+    const candidate = cleanDocumentTitleCandidate(analyzeKbDoc[1])
+    if (candidate) return candidate
+  }
+
+  // 「小说写作教程文件的主要内容」
+  const namedFile = trimmed.match(
+    /(.+?)\s*(?:文件|文档)\s*(?:的)?\s*(?:主要内容|大意|内容|摘要)/u,
+  )
+  if (namedFile?.[1]) {
+    const candidate = cleanDocumentTitleCandidate(namedFile[1])
+    if (candidate) return candidate
   }
 
   const beforeChapter = trimmed.match(
     /(.+?)(?:中|里|内)?[，,]?\s*第\s*[一二三四五六七八九十百零〇两\d]+\s*章/,
   )
   if (beforeChapter?.[1]) {
-    const candidate = beforeChapter[1]
-      .replace(/^(?:搜索|查找|在|从|本地知识库|知识库|中|\s)+/u, '')
-      .replace(/\s*(?:文件|文档|这本书|该书)$/u, '')
-      .replace(/[《》]/g, '')
-      .trim()
-    if (candidate.length >= 2 && candidate.length <= 80) return candidate
+    const candidate = cleanDocumentTitleCandidate(beforeChapter[1])
+    if (candidate) return candidate
   }
 
   const beforePage = trimmed.match(/(.+?)\s*第\s*\d+\s*页/i)
   if (beforePage?.[1]) {
-    const candidate = beforePage[1]
-      .replace(/^(?:搜索|查找|在|从|本地知识库|知识库|中|\s)+/u, '')
-      .replace(/\s*(?:文件|文档)$/u, '')
-      .trim()
-    if (candidate.length >= 3) return candidate
+    const candidate = cleanDocumentTitleCandidate(beforePage[1])
+    if (candidate) return candidate
   }
 
   const quoted = trimmed.match(/[「"']([^「」"']+?)[」"']/)

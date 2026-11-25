@@ -92,6 +92,13 @@ describe('model-utils', () => {
     expect(pickDefaultModelId([], mixed)).toBe(`${deepseekId}:deepseek-v4-flash`)
   })
 
+  it('pickDefaultModelId preferLocal heals unconfigured onto Ollama first', () => {
+    const mixed = [makeOllama([{ id: 'qwen3.5:9b', name: 'qwen3.5:9b' }]), makeDeepSeek()]
+    expect(pickDefaultModelId([], mixed, undefined, null, { preferLocal: true })).toBe(
+      `${ollamaId}:qwen3.5:9b`,
+    )
+  })
+
   it('pickDefaultModelId ignores missing assistant model instead of inventing gemma4', () => {
     const assistants = [makeAssistant(`${ollamaId}:gemma4:latest`)]
     const localOnly = [makeOllama([{ id: 'qwen3.5:9b', name: 'qwen3.5:9b' }])]

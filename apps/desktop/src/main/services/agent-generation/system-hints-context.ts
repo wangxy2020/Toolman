@@ -29,8 +29,23 @@ import {
   searchKnowledgeForChat,
   getAssistantKbIds,
 } from '../knowledge-document.service'
-import { parseModelId } from '../provider.service'
+import { getProviderConfig, parseModelId } from '../provider.service'
 import type { BuildRuntimeSystemHintsOptions } from './types'
+
+function resolveKnowledgeExpandProfileForModel(
+  modelId: string | undefined,
+): 'full' | 'compact' {
+  if (!modelId?.trim()) return 'full'
+  try {
+    const { providerId } = parseModelId(modelId)
+    const provider = getProviderConfig(providerId)
+    // Local Ollama on Apple Metal OOMs when ~384KB of KB text is injected.
+    if (provider?.type === 'ollama') return 'compact'
+  } catch {
+    // fall through
+  }
+  return 'full'
+}
 
 function looksLikeDirectoryExportGoal(text: string): boolean {
   const goal = text.trim()
@@ -167,6 +182,7 @@ export async function appendRuntimeContextHints(
     if (kbIds.length > 0) {
       hints.push(buildKnowledgeEnabledHint())
       try {
+        const expandProfile = resolveKnowledgeExpandProfileForModel(options.modelId)
         const results = await searchKnowledgeForChat({
           workspaceId: options.runtime.workspaceId,
           kbIds,
@@ -182,6 +198,7 @@ export async function appendRuntimeContextHints(
           kbSettings: assistantParams.kbSettings as
             | Record<string, { topK?: number; scoreThreshold?: number }>
             | undefined,
+          expandProfile,
         })
         kbResults = results
         if (socraticMode) {
