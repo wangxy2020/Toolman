@@ -200,10 +200,11 @@ export function useChatSend(
       )
 
       const baseOptions = buildSendOptionsForSession(contentBlocks)
+      // Keep course kbIds from buildSendOptions — do not overwrite with the
+      // shared classroom agent's global knowledge bases.
       await sendNewUserMessage(ctx, contentBlocks, {
         ...baseOptions,
         enableTools,
-        kbIds: sendAssistant?.parameters.kbIds ?? baseOptions.kbIds,
       })
     },
     [

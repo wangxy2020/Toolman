@@ -81,7 +81,7 @@ export const AssistantLibSessionMetaSchema = z.object({
   autoSpeak: z.boolean().optional(),
   ttsEngine: VoiceTtsEngineSchema.optional(),
   ttsVoice: z.string().min(1).optional(),
-  /** Chat model from program settings (providerId:modelName). Empty = workspace default. */
+  /** Legacy per-course model; cleared on save so chats follow the classroom agent. */
   modelId: z.string().min(1).optional(),
   /** One entry per 上课; scoped to this course session. */
   studyRecords: z.array(ClassroomStudyRecordSchema).optional(),

@@ -89,19 +89,27 @@ export function useAssistantLibPage(props: AssistantLibPageProps) {
         },
       })
       if (cancelled) return
+      let sessionsForBind = sessionsAfterLoad.length > 0 ? sessionsAfterLoad : props.chat.sessions
       if (healed.healed) {
-        await props.chat.loadSessions()
+        const refreshed = await props.chat.loadSessions()
+        if (cancelled) return
+        sessionsForBind = refreshed.length > 0 ? refreshed : props.chat.sessions
         if (healed.keepSessionId) await selectSession(healed.keepSessionId)
       }
 
       const activeWasRemoved = Boolean(
         activeSessionId && linked.removedDefaultIds.includes(activeSessionId),
       )
+      const activeSession =
+        activeWasRemoved
+          ? null
+          : (sessionsForBind.find((item) => item.id === activeSessionId) ??
+            props.chat.activeSession)
       await ensureActiveClassroomChatSession({
         classroomAssistant: linked.assistant,
         chat: {
-          sessions: props.chat.sessions,
-          activeSession: activeWasRemoved ? null : props.chat.activeSession,
+          sessions: sessionsForBind,
+          activeSession,
           createSession,
           selectSession,
         },

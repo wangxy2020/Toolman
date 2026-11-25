@@ -38,7 +38,7 @@ export type AssistantLibClassroomDraft = {
   autoSpeak: boolean
   ttsEngine: VoiceTtsEngine
   ttsVoice: string
-  /** Empty = follow workspace default model. */
+  /** Shared「课堂」agent model id (providerId:modelName). */
   modelId: string
 }
 

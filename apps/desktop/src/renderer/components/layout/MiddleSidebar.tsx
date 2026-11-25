@@ -64,14 +64,22 @@ function groupSessions(sessions: Session[], assistants: Assistant[]) {
   for (const assistant of assistants) {
     map.set(assistant.id, [])
   }
+  const hasClassroomAssistant = assistants.some((assistant) =>
+    isAssistantLibAssistantName(assistant.name),
+  )
   const unassigned: Session[] = []
 
   for (const session of sessions) {
     if (session.assistantId && map.has(session.assistantId)) {
       map.get(session.assistantId)!.push(session)
-    } else {
-      unassigned.push(session)
+      continue
     }
+    // Course / classroom topics with a stale assistantId belong under 课堂,
+    // not「其他话题」— sessionsForAssistant already merges them there.
+    if (hasClassroomAssistant && isAssistantLibSession(session.metadata)) {
+      continue
+    }
+    unassigned.push(session)
   }
 
   return { map, unassigned }

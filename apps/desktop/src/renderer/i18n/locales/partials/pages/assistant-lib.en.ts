@@ -127,7 +127,6 @@ export const assistantLibPageEn = {
   courseModel: 'Model',
   courseModelHint:
     'Same as the Classroom agent model in Agent settings. Changing it here updates that agent.',
-  courseModelDefault: 'Use default model',
   courseModelEmpty: 'Add a model in Settings → Model service first',
   teachingMode: 'Teaching mode',
   learningBadge: 'Learn',

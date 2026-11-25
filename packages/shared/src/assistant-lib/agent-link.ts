@@ -19,10 +19,7 @@ export const ASSISTANT_LIB_ASSISTANT_NAME_LEGACY = ['助手课堂', '助手库']
 export const ASSISTANT_LIB_ASSISTANT_MARKER = 'assistant-lib'
 
 /** Default classroom topic title under the shared assistant-lib agent. */
-export const ASSISTANT_LIB_DEFAULT_CLASSROOM_TITLE = '默认课堂'
-
-/** Preset used by the built-in default classroom topic. */
-export const ASSISTANT_LIB_DEFAULT_CLASSROOM_PRESET_ID = 'socratic-tutor' as const
+const ASSISTANT_LIB_DEFAULT_CLASSROOM_TITLE = '默认课堂'
 
 export function isAssistantLibAssistantName(name: string | null | undefined): boolean {
   const trimmed = (name ?? '').trim()
@@ -228,50 +225,6 @@ export function buildAssistantLibCourseRuntimeHint(
   ]
     .filter(Boolean)
     .join('\n')
-}
-
-export function findAssistantLibDefaultClassroomSession<
-  T extends {
-    id?: string
-    assistantId: string | null
-    title: string
-    createdAt?: number
-    metadata: Record<string, unknown>
-  },
->(sessions: readonly T[], assistantId: string): T | null {
-  const candidates = sessions
-    .filter(
-      (session) =>
-        session.assistantId === assistantId && looksLikeAssistantLibDefaultClassroom(session),
-    )
-    .sort((left, right) => (left.createdAt ?? 0) - (right.createdAt ?? 0))
-
-  const flagged = candidates.find((session) =>
-    isAssistantLibDefaultClassroomSession(session.metadata),
-  )
-  return flagged ?? candidates[0] ?? null
-}
-
-/** Extra default-course sessions that should be removed (keep the oldest flagged one). */
-export function listDuplicateAssistantLibDefaultClassroomIds<
-  T extends {
-    id: string
-    assistantId: string | null
-    title: string
-    createdAt?: number
-    metadata: Record<string, unknown>
-  },
->(sessions: readonly T[], assistantId: string): string[] {
-  const keeper = findAssistantLibDefaultClassroomSession(sessions, assistantId)
-  if (!keeper) return []
-  return sessions
-    .filter(
-      (session) =>
-        session.assistantId === assistantId &&
-        session.id !== keeper.id &&
-        looksLikeAssistantLibDefaultClassroom(session),
-    )
-    .map((session) => session.id)
 }
 
 /** All built-in default-course sessions — used when retiring that menu entry. */

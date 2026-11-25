@@ -98,7 +98,7 @@ export function useChatPageAssistant(
       chat.setSelectedModelIds(modelIds)
       const primaryModelId = modelIds[0]
       if (!primaryModelId || !activeAssistant) return
-      // Agent-page path edits the agent settings model. Course overrides stay in 课程设置.
+      // Agent-page path edits the active agent's settings model.
       if (activeAssistant.modelId === primaryModelId) return
       void (async () => {
         const result = await updateAssistantModel(activeAssistant, primaryModelId)
@@ -121,8 +121,10 @@ export function useChatPageAssistant(
     if (!assistant || !modelId) return
 
     if (isUnconfiguredModelId(modelId)) {
+      // Do not inherit another agent's model via resolvePrimaryAssistant —
+      // only app default + available providers.
       const fallback = pickDefaultModelId(
-        chat.assistants,
+        [],
         chat.providers,
         undefined,
         appSettings?.defaultChatModelId,
@@ -157,7 +159,6 @@ export function useChatPageAssistant(
   }, [
     activeAssistant,
     appSettings?.defaultChatModelId,
-    chat.assistants,
     chat.loadAssistants,
     chat.providers,
     chat.setError,

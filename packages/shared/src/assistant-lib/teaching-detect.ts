@@ -35,22 +35,6 @@ export function parseAssistantLibSessionMeta(
   return parsed.success ? parsed.data : null
 }
 
-/** Course-level chat model; null means follow the workspace / assistant default. */
-export function resolveAssistantLibSessionModelId(
-  metadata: Record<string, unknown> | undefined | null,
-): string | null {
-  const modelId = parseAssistantLibSessionMeta(metadata)?.modelId?.trim()
-  if (modelId) return modelId
-  if (!metadata) return null
-  const raw = metadata[ASSISTANT_LIB_SESSION_METADATA_KEY]
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
-  const record = raw as Record<string, unknown>
-  if (record.enabled !== true) return null
-  if (typeof record.presetId !== 'string' || !record.presetId.trim()) return null
-  const loose = typeof record.modelId === 'string' ? record.modelId.trim() : ''
-  return loose || null
-}
-
 export function isAssistantLibSession(metadata: Record<string, unknown> | undefined | null): boolean {
   return Boolean(parseAssistantLibSessionMeta(metadata))
 }
@@ -142,7 +126,7 @@ function resolveTtsFromAssistantLibRaw(
 }
 
 /** Resolve classroom TTS; assistant-lib defaults autoSpeak to on. */
-export function resolveAssistantLibSessionTts(
+function resolveAssistantLibSessionTts(
   metadata: Record<string, unknown> | undefined | null,
 ): ResolvedChatTts | null {
   const meta = parseAssistantLibSessionMeta(metadata)
@@ -189,14 +173,6 @@ export function isAssistantLibGuideCourseSession(
 ): boolean {
   return parseAssistantLibSessionMeta(metadata)?.isGuideClassroom === true
 }
-
-/** Default course — cannot be deleted. The usage-guide course can be removed. */
-export function isAssistantLibBuiltinClassroomSession(
-  metadata: Record<string, unknown> | undefined | null,
-): boolean {
-  return isAssistantLibDefaultClassroomSession(metadata)
-}
-
 
 export function parseSocraticState(metadata: Record<string, unknown> | undefined | null): SocraticState {
   const parsed = SocraticStateSchema.safeParse(metadata?.socraticState)

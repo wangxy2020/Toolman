@@ -126,7 +126,6 @@ export const assistantLibPageZhCN = {
   courseModel: '大模型',
   courseModelHint:
     '与智能体设置中「课堂」智能体的模型一致。在此修改会同步更新课堂智能体设置。',
-  courseModelDefault: '使用默认模型',
   courseModelEmpty: '请先在程序设置 → 模型服务中添加模型',
   teachingMode: '教学模式',
   learningBadge: '学习',

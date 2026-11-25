@@ -49,9 +49,9 @@ export async function ensureActiveClassroomChatSession(options: {
   if (preferredSessionId) {
     const preferred =
       chat.sessions.find((session) => session.id === preferredSessionId) ?? null
-    if (isClassroomOwnedSession(preferred, assistantId)) {
-      if (chat.activeSession?.id !== preferred!.id) {
-        await chat.selectSession(preferred!.id)
+    if (preferred && isClassroomOwnedSession(preferred, assistantId)) {
+      if (chat.activeSession?.id !== preferred.id) {
+        await chat.selectSession(preferred.id)
       }
       return preferred
     }
@@ -92,6 +92,7 @@ export async function ensureActiveClassroomChatSession(options: {
 /**
  * If上课 messages landed on a blank classroom shell while the real course topic
  * stayed empty, fold the shell into the course (keep messages, restore course title/meta).
+ * Only deletes empty course shells — never courses that already have messages.
  */
 export async function healClassroomChatOrphans(options: {
   classroomAssistantId: string
@@ -102,18 +103,22 @@ export async function healClassroomChatOrphans(options: {
   ) => Promise<Session | null>
   deleteSession: (sessionId: string) => Promise<boolean>
 }): Promise<{ healed: boolean; keepSessionId?: string; dropSessionId?: string }> {
-  const owned = options.sessions.filter(
-    (session) => session.assistantId === options.classroomAssistantId,
+  const courses = options.sessions.filter((session) => isCourseTopic(session))
+  const classroomAssistantIds = new Set<string>([options.classroomAssistantId])
+  for (const course of courses) {
+    if (course.assistantId) classroomAssistantIds.add(course.assistantId)
+  }
+  const orphans = options.sessions.filter(
+    (session) =>
+      !isAssistantLibSession(session.metadata) &&
+      (session.messageCount ?? 0) > 0 &&
+      Boolean(session.assistantId && classroomAssistantIds.has(session.assistantId)),
   )
-  const courses = owned.filter((session) => isCourseTopic(session))
-  const orphans = owned.filter(
-    (session) => !isAssistantLibSession(session.metadata) && (session.messageCount ?? 0) > 0,
-  )
+  const emptyCourses = courses.filter((course) => (course.messageCount ?? 0) === 0)
 
   for (const orphan of orphans) {
     const emptyCourse =
-      courses.find((course) => (course.messageCount ?? 0) === 0) ??
-      courses.find((course) => (course.messageCount ?? 0) < (orphan.messageCount ?? 0))
+      emptyCourses.find((course) => course.assistantId === orphan.assistantId) ?? emptyCourses[0]
     if (!emptyCourse) continue
     const meta = parseAssistantLibSessionMeta(emptyCourse.metadata)
     if (!meta) continue
@@ -125,10 +130,19 @@ export async function healClassroomChatOrphans(options: {
         ? { socraticState: orphan.metadata.socraticState }
         : {}),
     }
+    const previousTitle = orphan.title
+    const previousMetadata = orphan.metadata ?? {}
     const updated = await options.updateSession(orphan.id, { title, metadata })
     if (!updated) continue
     const deleted = await options.deleteSession(emptyCourse.id)
-    if (!deleted) continue
+    if (!deleted) {
+      // Roll back orphan rename so we do not leave two course-looking topics.
+      await options.updateSession(orphan.id, {
+        title: previousTitle,
+        metadata: previousMetadata,
+      })
+      continue
+    }
     return { healed: true, keepSessionId: orphan.id, dropSessionId: emptyCourse.id }
   }
 

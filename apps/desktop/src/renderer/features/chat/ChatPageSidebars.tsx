@@ -83,11 +83,13 @@ export function ChatPageSidebars(props: ChatPageSidebarsProps) {
             const assistant = sidebarAssistants.find((item) => item.id === assistantId)
             if (!assistant) return
             const isClassroom = isAssistantLibAssistantName(assistant.name)
+            let sessionsSnapshot = chat.sessions
             if (isClassroom) {
               const items = await chat.loadSessions()
+              sessionsSnapshot = items.length > 0 ? items : chat.sessions
               const healed = await healClassroomChatOrphans({
                 classroomAssistantId: assistant.id,
-                sessions: items.length > 0 ? items : chat.sessions,
+                sessions: sessionsSnapshot,
                 updateSession: async (sessionId, patch) => {
                   const result = await window.api.invoke(IpcChannel.SessionUpdate, {
                     id: sessionId,
@@ -109,7 +111,8 @@ export function ChatPageSidebars(props: ChatPageSidebarsProps) {
                 },
               })
               if (healed.healed) {
-                await chat.loadSessions()
+                const refreshed = await chat.loadSessions()
+                sessionsSnapshot = refreshed.length > 0 ? refreshed : chat.sessions
                 if (healed.keepSessionId) {
                   await chat.selectSession(healed.keepSessionId)
                   return
@@ -118,12 +121,12 @@ export function ChatPageSidebars(props: ChatPageSidebarsProps) {
             }
             const topics = (
               isClassroom
-                ? chat.sessions.filter(
+                ? sessionsSnapshot.filter(
                     (session) =>
                       session.assistantId === assistantId ||
                       isAssistantLibSession(session.metadata),
                   )
-                : chat.sessions.filter((session) => session.assistantId === assistantId)
+                : sessionsSnapshot.filter((session) => session.assistantId === assistantId)
             ).sort((left, right) => right.updatedAt - left.updatedAt)
             if (
               chat.activeSessionId &&

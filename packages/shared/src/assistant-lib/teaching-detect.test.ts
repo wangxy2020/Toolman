@@ -3,7 +3,6 @@ import {
   ASSISTANT_LIB_ASSISTANT_NAME,
   ASSISTANT_LIB_ASSISTANT_NAME_LEGACY,
   listAssistantLibDefaultClassroomIds,
-  listDuplicateAssistantLibDefaultClassroomIds,
   listDuplicateAssistantLibGuideCourseIds,
   isAssistantLibAssistantName,
   isLegacyPerCourseTeachingAssistant,
@@ -12,12 +11,10 @@ import {
 } from './agent-link.js'
 import {
   assistantLibSessionMetadataPatch,
-  isAssistantLibBuiltinClassroomSession,
   isAssistantLibGuideCourseSession,
   looksLikeSocraticAnswerLeak,
   isTeachingAssistantParameters,
   parseAssistantLibSessionMeta,
-  resolveAssistantLibSessionModelId,
   resolveEffectiveChatTts,
 } from './teaching-detect.js'
 
@@ -77,30 +74,6 @@ describe('socratic referee heuristics', () => {
     expect(resolveCanonicalAssistantLibAssistant(assistants, sessions)?.id).toBe('new')
   })
 
-  it('lists duplicate default classrooms for cleanup', () => {
-    const assistantId = 'a1'
-    const ids = listDuplicateAssistantLibDefaultClassroomIds(
-      [
-        {
-          id: 'keep',
-          assistantId,
-          title: '默认课堂',
-          createdAt: 1,
-          metadata: { toolmanAssistantLib: { enabled: true, isDefaultClassroom: true } },
-        },
-        {
-          id: 'drop',
-          assistantId,
-          title: '默认课堂',
-          createdAt: 2,
-          metadata: { toolmanAssistantLib: { enabled: true, isDefaultClassroom: true } },
-        },
-      ],
-      assistantId,
-    )
-    expect(ids).toEqual(['drop'])
-  })
-
   it('lists every default classroom for retirement', () => {
     const assistantId = 'a1'
     expect(
@@ -139,16 +112,6 @@ describe('socratic referee heuristics', () => {
       },
     }
     expect(isAssistantLibGuideCourseSession(metadata)).toBe(true)
-    expect(isAssistantLibBuiltinClassroomSession(metadata)).toBe(false)
-    expect(
-      isAssistantLibBuiltinClassroomSession({
-        toolmanAssistantLib: {
-          enabled: true,
-          presetId: 'socratic-tutor',
-          isDefaultClassroom: true,
-        },
-      }),
-    ).toBe(true)
   })
 
   it('lists duplicate Toolman usage-guide courses for cleanup', () => {
@@ -209,7 +172,7 @@ describe('socratic referee heuristics', () => {
     expect(runtime.courseSystemPrompt).toBeTruthy()
   })
 
-  it('reads and patches a per-course chat model', () => {
+  it('clears legacy per-course modelId when patched empty', () => {
     const metadata = {
       toolmanAssistantLib: {
         enabled: true,
@@ -218,17 +181,16 @@ describe('socratic referee heuristics', () => {
         modelId: 'prov:gpt-4o-mini',
       },
     }
-    expect(resolveAssistantLibSessionModelId(metadata)).toBe('prov:gpt-4o-mini')
     const kept = assistantLibSessionMetadataPatch(metadata, {
       presetId: 'socratic-tutor',
       courseName: 'Rust',
     })
-    expect(resolveAssistantLibSessionModelId(kept)).toBe('prov:gpt-4o-mini')
+    expect(parseAssistantLibSessionMeta(kept)?.modelId).toBe('prov:gpt-4o-mini')
     const cleared = assistantLibSessionMetadataPatch(metadata, {
       presetId: 'socratic-tutor',
       modelId: '',
     })
-    expect(resolveAssistantLibSessionModelId(cleared)).toBeNull()
+    expect(parseAssistantLibSessionMeta(cleared)?.modelId).toBeUndefined()
   })
 
   it('preserves autoSpeak / tts settings when a syllabus patch omits them', () => {
@@ -312,17 +274,4 @@ describe('socratic referee heuristics', () => {
     expect(resolved.autoSpeak).toBe(true)
   })
 
-  it('reads course modelId even when strict meta parse fails', () => {
-    expect(
-      resolveAssistantLibSessionModelId({
-        toolmanAssistantLib: {
-          enabled: true,
-          presetId: 'socratic-tutor',
-          learningLabel: '学习',
-          modelId: 'prov:deepseek-v4-flash',
-          kbIds: ['not-a-uuid'],
-        },
-      }),
-    ).toBe('prov:deepseek-v4-flash')
-  })
 })

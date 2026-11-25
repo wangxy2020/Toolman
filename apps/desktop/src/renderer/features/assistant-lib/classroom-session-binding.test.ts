@@ -186,4 +186,76 @@ describe('ensureActiveClassroomChatSession', () => {
     )
     expect(deleteSession).toHaveBeenCalledWith('course')
   })
+
+  it('never deletes a course that already has messages', async () => {
+    const orphan = session({
+      id: 'orphan',
+      title: '开始上课…',
+      assistantId: 'class',
+      messageCount: 6,
+      updatedAt: 9,
+    })
+    const course = session({
+      id: 'course',
+      title: '高中化学必修1',
+      assistantId: 'class',
+      metadata: classroomMeta,
+      messageCount: 2,
+      updatedAt: 2,
+    })
+    const updateSession = vi.fn(async () => orphan)
+    const deleteSession = vi.fn(async () => true)
+
+    const result = await healClassroomChatOrphans({
+      classroomAssistantId: 'class',
+      sessions: [orphan, course],
+      updateSession,
+      deleteSession,
+    })
+
+    expect(result).toEqual({ healed: false })
+    expect(updateSession).not.toHaveBeenCalled()
+    expect(deleteSession).not.toHaveBeenCalled()
+  })
+
+  it('rolls back orphan metadata when delete fails', async () => {
+    const orphan = session({
+      id: 'orphan',
+      title: '开始上课…',
+      assistantId: 'class',
+      messageCount: 4,
+      metadata: { socraticState: { mastered: ['a'] } },
+    })
+    const course = session({
+      id: 'course',
+      title: '高中化学必修1',
+      assistantId: 'class',
+      metadata: classroomMeta,
+      messageCount: 0,
+    })
+    const updateSession = vi.fn(async () => orphan)
+    const deleteSession = vi.fn(async () => false)
+
+    const result = await healClassroomChatOrphans({
+      classroomAssistantId: 'class',
+      sessions: [orphan, course],
+      updateSession,
+      deleteSession,
+    })
+
+    expect(result).toEqual({ healed: false })
+    expect(updateSession).toHaveBeenNthCalledWith(
+      1,
+      'orphan',
+      expect.objectContaining({ title: '课程' }),
+    )
+    expect(updateSession).toHaveBeenNthCalledWith(
+      2,
+      'orphan',
+      expect.objectContaining({
+        title: '开始上课…',
+        metadata: { socraticState: { mastered: ['a'] } },
+      }),
+    )
+  })
 })
